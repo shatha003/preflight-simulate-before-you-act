@@ -3,6 +3,8 @@
 ## AI tools used
 - **Claude Code (Claude Sonnet 5.5)** wrote most of the code and tests in a pair-programming loop, and drafted these docs. The design decisions below were reviewed and chosen with the owner.
 - **Claude Haiku 5.5 via Vercel AI Gateway** reads plain-English requests into a typed action. It is optional: without a key the rule parser runs. The LLM never writes SQL, and its output is validated and clamped. **The LLM path has not run successfully.** On the deployed site the gateway call is attempted, but AI Gateway refused it because the Vercel account has no card on file ("AI Gateway requires a valid credit card on file"). The route then falls back to the rule parser and reports why in a `note` field. Everything described as tested was tested on the rule-based path.
+
+## Key decisions
 - **Real Postgres, in the browser (PGlite).** A real engine means real cascades, triggers and transactions, so side effects are observed rather than guessed. Running it client-side means the demo needs no backend and every visitor gets an isolated database.
 - **Simulate by executing and rolling back,** not by asking a model to predict. The preview is a measurement.
 - **Same SQL for preview and execution.** One code path, so the preview cannot describe a different action than the one that runs.
