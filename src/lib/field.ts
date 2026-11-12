@@ -10,6 +10,16 @@ export interface Roster {
   optIn: boolean;
 }
 
+/** What this customer would actually experience, read from the simulated diff. */
+export interface Story {
+  orders: { n: number; cents: number };
+  payments: { n: number; cents: number; recent: number };
+  refunds: { id: number; cents: number }[];
+  emails: { kind: string; subject: string }[];
+  archived: boolean;
+  optedIn: boolean;
+}
+
 export interface Seat {
   id: number;
   vacant: boolean;
@@ -18,7 +28,10 @@ export interface Seat {
   kind: SeatKind;
   danger: boolean;
   notes: string[];
+  story: Story;
 }
+
+const emptyStory = (optedIn = false): Story => ({ orders: { n: 0, cents: 0 }, payments: { n: 0, cents: 0, recent: 0 }, refunds: [], emails: [], archived: false, optedIn });
 
 const RETENTION_MS = 365 * 86_400_000;
 
@@ -33,12 +46,23 @@ export function buildSeats(roster: Roster[], sim: Simulation | null): Seat[] {
 
   const deleted = new Set(d?.customers.deleted.map((r) => r.id));
   const cascadeOrders = new Map<number, number>();
+  const orderCents = new Map<number, number>();
   const cascadePay = new Map<number, { n: number; cents: number; recent: number }>();
   const refunds = new Map<number, number>();
+  const refundRows = new Map<number, { id: number; cents: number }[]>();
   const mails = new Map<number, string[]>();
+  const mailRows = new Map<number, { kind: string; subject: string }[]>();
+  const archived = new Set<number>();
   const now = Date.now();
 
-  for (const o of d?.orders.deleted ?? []) cascadeOrders.set(Number(o.customer_id), (cascadeOrders.get(Number(o.customer_id)) ?? 0) + 1);
+  for (const t of d?.trash.inserted ?? []) {
+    if (t.source === "customers") archived.add(Number((t.row_data as { id?: number }).id));
+  }
+  for (const o of d?.orders.deleted ?? []) {
+    const k = Number(o.customer_id);
+    cascadeOrders.set(k, (cascadeOrders.get(k) ?? 0) + 1);
+    orderCents.set(k, (orderCents.get(k) ?? 0) + Number(o.total_cents));
+  }
   for (const p of d?.payments.deleted ?? []) {
     const k = Number(p.customer_id);
     const cur = cascadePay.get(k) ?? { n: 0, cents: 0, recent: 0 };
@@ -50,17 +74,19 @@ export function buildSeats(roster: Roster[], sim: Simulation | null): Seat[] {
   for (const u of d?.payments.updated ?? []) {
     const k = Number(u.after.customer_id);
     refunds.set(k, (refunds.get(k) ?? 0) + Number(u.after.refunded_cents));
+    refundRows.set(k, [...(refundRows.get(k) ?? []), { id: u.id, cents: Number(u.after.refunded_cents) }]);
   }
   for (const m of d?.outbox.inserted ?? []) {
     const k = Number(m.customer_id);
     mails.set(k, [...(mails.get(k) ?? []), String(m.kind)]);
+    mailRows.set(k, [...(mailRows.get(k) ?? []), { kind: String(m.kind), subject: String(m.subject) }]);
   }
 
   const seats: Seat[] = [];
   for (let id = 1; id <= max; id++) {
     const r = byId.get(id);
     if (!r) {
-      seats.push({ id, vacant: true, name: "", plan: "", kind: "idle", danger: false, notes: [] });
+      seats.push({ id, vacant: true, name: "", plan: "", kind: "idle", danger: false, notes: [], story: emptyStory() });
       continue;
     }
     const notes: string[] = [];
@@ -90,7 +116,16 @@ export function buildSeats(roster: Roster[], sim: Simulation | null): Seat[] {
         notes.push("Opted out of marketing");
       }
     }
-    seats.push({ id, vacant: false, name: r.name, plan: r.plan, kind, danger, notes });
+    const pay = cascadePay.get(id);
+    const story: Story = {
+      orders: { n: cascadeOrders.get(id) ?? 0, cents: orderCents.get(id) ?? 0 },
+      payments: { n: pay?.n ?? 0, cents: pay?.cents ?? 0, recent: pay?.recent ?? 0 },
+      refunds: refundRows.get(id) ?? [],
+      emails: mailRows.get(id) ?? [],
+      archived: archived.has(id),
+      optedIn: r.optIn,
+    };
+    seats.push({ id, vacant: false, name: r.name, plan: r.plan, kind, danger, notes, story });
   }
   return seats;
 }

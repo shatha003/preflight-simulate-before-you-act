@@ -94,6 +94,38 @@ button:disabled { cursor: not-allowed; }
 /* the proofreader circles what they are worried about */
 .ringed .nm { outline: 1.6px solid var(--red); outline-offset: 1px; border-radius: 46% 54% 50% 50% / 68% 46% 62% 40%; padding: 0 0.3em; }
 
+/* the line a customer was pinned on, so you can see whose slip is open */
+.ln.pinned { outline: 1.5px dashed var(--ink); outline-offset: 1px; }
+
+/* ---- Tracing paper: a tinted sheet that stops at an edge, and the tab you pull it by ---- */
+.vellum {
+  position: absolute;
+  left: -8px;
+  right: -8px;
+  top: -4px;
+  pointer-events: none;
+  background: rgba(205, 195, 150, 0.17);
+  mix-blend-mode: multiply;
+  border-bottom: 1.5px solid rgba(27, 25, 21, 0.55);
+  box-shadow: 0 9px 12px -9px rgba(50, 36, 10, 0.55);
+}
+.paper-tab {
+  position: absolute;
+  right: 0;
+  width: 28px;
+  height: 44px;
+  margin-top: -22px;
+  background: var(--ink);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: ns-resize;
+  user-select: none;
+}
+.paper-tab span { display: block; width: 14px; height: 2px; background: var(--paper); }
+
 /* legend swatches reuse the same marks, so the key is the real thing */
 .key .nm { transition: none; background-size: 100% var(--mh, 2px); }
 

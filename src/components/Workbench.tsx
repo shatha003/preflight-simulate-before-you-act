@@ -11,13 +11,14 @@ import { concurrentWriter, removeHiddenTrigger, shipHiddenTrigger } from "@/lib/
 import { appendAudit, verifyChain, type AuditEntry } from "@/lib/audit";
 import { HOLD_SECONDS } from "@/lib/risk";
 import { parseIntentRules } from "@/lib/intent";
-import { buildSeats, type Roster } from "@/lib/field";
+import { buildSeats, type Roster, type Seat } from "@/lib/field";
 import { usd } from "@/lib/format";
 import { Button, CropMarks, Label, Registration, Tag, verdictMeta } from "./ui";
 import { Stamp } from "./Stamp";
 import { SignOff } from "./SignOff";
 import { Ledger, type FieldMode } from "./Ledger";
 import { Notes } from "./Notes";
+import { TheirSide } from "./TheirSide";
 import { DiffView } from "./DiffView";
 import { PressLog, Receipts, RollbackPlan } from "./Panels";
 
@@ -77,6 +78,7 @@ export function Workbench() {
   const [error, setError] = useState("");
   const [tab, setTab] = useState<Tab>("diff");
   const [mode, setMode] = useState<FieldMode>("reality");
+  const [pinnedId, setPinnedId] = useState<number | null>(null);
 
   const [result, setResult] = useState<ExecResult | null>(null);
   const [committedAt, setCommittedAt] = useState(0);
@@ -96,6 +98,7 @@ export function Workbench() {
   const previewsRef = useRef<TweakPreview[]>([]);
   const resultRef = useRef<ExecResult | null>(null);
   const cancelDemo = useRef(false);
+  const seatsRef = useRef<Seat[]>([]);
 
   const refresh = useCallback(async () => {
     const db = dbRef.current;
@@ -259,6 +262,7 @@ export function Workbench() {
       await log("approved", { action: s.proposal.action, verdict: s.report.verdict, approvedRows: s.report.metrics.rowsTouched, digest: s.digest });
       const res = await execute(db, s);
       putResult(res);
+      setPinnedId(null);
       if (res.status === "committed") {
         setCommittedAt(Date.now());
         setMode("committed");
@@ -278,6 +282,7 @@ export function Workbench() {
   async function reject() {
     token.current++;
     await log("rejected", { action: simRef.current?.proposal.action });
+    setPinnedId(null);
     putSim(null);
     setProposal(null);
     putResult(null);
@@ -333,6 +338,7 @@ export function Workbench() {
     token.current++;
     setBusy(true);
     await resetDb(db);
+    setPinnedId(null);
     putSim(null);
     setProposal(null);
     putResult(null);
@@ -380,7 +386,13 @@ export function Workbench() {
       setText(DEMO_TEXT);
       await say(2, "I ask the agent to clean up dormant accounts. Preflight runs it for real on a copy, inside a transaction, then marks up the ledger.", 600);
       await propose(DEMO_TEXT);
-      await say(3, "Every line is a customer. Struck-through names would be deleted, circled ones are the danger. The database found the cascade into payments. No model guessed it.", 5600);
+      await say(3, "Every line is a customer, and the proof is on tracing paper that marks only what it has passed. Struck-through names would be deleted, circled ones are the danger.", 4200);
+      const risky = seatsRef.current.find((x) => x.danger);
+      if (risky && window.innerWidth >= 640) {
+        setPinnedId(risky.id);
+        await say(3, `Click a name to see their side. ${risky.name.split(" ")[0]} would lose an account and payments we are legally holding. The database found that cascade. No model guessed it.`, 5200);
+        setPinnedId(null);
+      }
       await say(4, "Policy ran on what actually changed. The retention rule fails, and the proof is stamped KILLED.", 4200);
       const fix = previewsRef.current.find((p) => p.tweak.patch.keepWithRecentPayments === true);
       if (fix) {
@@ -416,6 +428,8 @@ export function Workbench() {
   };
 
   const seats = useMemo(() => buildSeats(roster, sim), [roster, sim]);
+  seatsRef.current = seats;
+  const pinnedSeat = pinnedId === null ? null : (seats.find((x) => x.id === pinnedId && !x.vacant) ?? null);
   const m = sim?.report.metrics;
   const recallLeft = Math.max(0, Math.ceil((committedAt + HOLD_SECONDS * 1000 - now) / 1000));
   const verdict = sim?.report.verdict;
@@ -594,7 +608,7 @@ export function Workbench() {
             </div>
           )}
 
-          <Ledger seats={seats} mode={mode} onMode={setMode} hasSim={Boolean(sim)} />
+          <Ledger seats={seats} mode={mode} onMode={setMode} hasSim={Boolean(sim)} pinnedId={pinnedId} onPick={(s) => setPinnedId((p) => (p === s.id ? null : s.id))} />
 
           {sim && (
             <section className="mt-9 border-t-2 border-ink pt-3" aria-label="Overleaf">
@@ -769,7 +783,7 @@ export function Workbench() {
 
       {/* Demo caption */}
       {demo && (
-        <div role="status" aria-live="polite" className="settle fixed inset-x-0 bottom-28 z-30 mx-auto w-[min(820px,calc(100%-2rem))]">
+        <div role="status" aria-live="polite" className="settle fixed bottom-28 left-4 z-30 w-[min(560px,calc(100%-2rem))] sm:left-8">
           <div className="border-2 border-ink bg-hi px-5 py-3 shadow-[4px_4px_0_rgba(27,25,21,0.35)]">
             <div className="font-type text-[12px]">
               Guided demo · {demo.step}/{demo.total}
@@ -778,6 +792,8 @@ export function Workbench() {
           </div>
         </div>
       )}
+
+      {pinnedSeat && <TheirSide seat={pinnedSeat} hasSim={Boolean(sim)} onClose={() => setPinnedId(null)} />}
 
       {/* Sign-off */}
       {sim && !result && (

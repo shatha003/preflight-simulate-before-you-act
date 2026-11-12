@@ -18,7 +18,8 @@ intent -> simulate -> present -> approve / tweak / reject -> execute (guarded) -
 1. **Job order (intent).** Plain English becomes one of three typed actions with parameters. An LLM does this when a gateway is available, otherwise a rule parser does. Neither writes SQL.
 2. **Simulate.** The action's SQL runs in a transaction on the live data. Before and after snapshots are diffed row by row, then the transaction is rolled back. Foreign-key cascades and triggers fire for real, so side effects are observed, not narrated.
 3. **Present.** The simulation is a press proof:
-   - **The ledger:** every customer is a typeset line. Laid over it, the proof strikes through who would be deleted, highlights who would be refunded, underlines who would be emailed, and circles the dangerous ones. Point at any name for its margin note.
+   - **The ledger, on tracing paper:** every customer is a typeset line. The proof is a sheet of tracing paper you pull down the page by its tab (drag it, or use the arrow keys). A name only carries a mark once the paper has passed it: struck through if it would be deleted, highlighted if refunded, underlined if emailed, circled if dangerous. The key counts only what the paper has reached. Point at any name for its margin note.
+   - **Their side of it:** click any name and a slip shows what that one person would find tomorrow, built from the simulated rows: no account and the orders and payments gone with it, the actual email they would receive, the refund and its receipt. A customer who opted out of marketing gets a handwritten warning. It updates live when you switch to a safer job, so you can watch the consequence disappear.
    - **The stamp:** APPROVED, HOLD or KILLED, with the numbers beside it, and the **proofreader's notes**: every policy rule ticked or crossed from what actually changed.
    - **Overleaf:** the row-level redline, the exact SQL receipt, the rollback plan, and the press log.
 4. **Decide.** Policy can deny the action. Safer plans (a parameter patch each) are simulated ahead of time, so you see the result of a fix before choosing it.
@@ -46,8 +47,8 @@ Both are caught by the same guard: the real effect leaves the approved envelope,
 
 ## Try it by hand
 
-1. Click **Delete accounts that have been inactive for 6 months**. The ledger is struck through in red, 28 names are circled, and the stamp says **KILLED**: those customers have payments inside the 12-month retention window.
-2. Use the safer plan **Keep anyone who paid in the last year**. It was already simulated; the stamp changes to **HOLD**.
+1. Click **Delete accounts that have been inactive for 6 months**. The tracing paper pulls down the ledger striking names through in red, 28 get circled, and the stamp says **KILLED**: those customers have payments inside the 12-month retention window.
+2. Click a circled name to read their side of it. Then use the safer plan **Keep anyone who paid in the last year**. It was already simulated; the stamp changes to **HOLD**.
 3. Under Sabotage the proof, click **Data drift**, then press and hold **Hold to sign off**. The press stops, the page says **Stop the press**, and nothing is written.
 4. **Re-simulate with current data**, sign off, then **Undo everything**. The "On the press right now" counters return to their starting values.
 5. Under the **Press log** tab, **Download press log** exports the hash-chained audit log as JSON.
