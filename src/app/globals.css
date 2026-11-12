@@ -1,68 +1,90 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #f6f5f1;
-  --surface: #ffffff;
-  --surface-2: #faf9f6;
-  --border: #e4e1d8;
-  --text: #1c1b18;
-  --muted: #6d6a60;
-  --ok: #1f7a4d;
-  --ok-soft: #e4f3ea;
-  --warn: #9a6200;
-  --warn-soft: #fbf0d6;
-  --bad: #b3261e;
-  --bad-soft: #fbe5e3;
-  --accent: #2b4acb;
-  --accent-soft: #e6ebfb;
-  --add: #e6f4ea;
-  --del: #fbe5e3;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #14130f;
-    --surface: #1c1b17;
-    --surface-2: #211f1b;
-    --border: #34312a;
-    --text: #efede6;
-    --muted: #a09c90;
-    --ok: #62c58d;
-    --ok-soft: #14271c;
-    --warn: #e5b04a;
-    --warn-soft: #2b2312;
-    --bad: #f0877f;
-    --bad-soft: #2d1816;
-    --accent: #8ea2ff;
-    --accent-soft: #1b2142;
-    --add: #14271c;
-    --del: #2d1816;
-  }
+  --bg: #080b0f;
+  --panel: #0e1319;
+  --panel2: #131a22;
+  --line: #1d2630;
+  --line2: #2b3745;
+  --ink: #e9eef5;
+  --muted: #8794a6;
+  --dim: #566274;
+  --amber: #ffb224;
+  --green: #34d17b;
+  --red: #ff5c52;
+  --cyan: #52c6f0;
 }
 
 @theme inline {
   --color-bg: var(--bg);
-  --color-surface: var(--surface);
-  --color-surface2: var(--surface-2);
-  --color-line: var(--border);
-  --color-ink: var(--text);
+  --color-panel: var(--panel);
+  --color-panel2: var(--panel2);
+  --color-line: var(--line);
+  --color-line2: var(--line2);
+  --color-ink: var(--ink);
   --color-muted: var(--muted);
-  --color-ok: var(--ok);
-  --color-oksoft: var(--ok-soft);
-  --color-warn: var(--warn);
-  --color-warnsoft: var(--warn-soft);
-  --color-bad: var(--bad);
-  --color-badsoft: var(--bad-soft);
-  --color-accent: var(--accent);
-  --color-accentsoft: var(--accent-soft);
-  --color-add: var(--add);
-  --color-del: var(--del);
-  --font-sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
-  --font-mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, monospace;
+  --color-dim: var(--dim);
+  --color-amber: var(--amber);
+  --color-green: var(--green);
+  --color-red: var(--red);
+  --color-cyan: var(--cyan);
+  --font-sans: var(--font-plex), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, "Cascadia Code", monospace;
+  --font-display: var(--font-barlow), "Arial Narrow", sans-serif;
 }
 
-html { color-scheme: light dark; }
-body { background: var(--bg); color: var(--text); font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
+html { color-scheme: dark; }
+
+body {
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(1200px 500px at 70% -10%, rgba(255, 178, 36, 0.07), transparent 60%),
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: auto, 56px 56px, 56px 56px;
+  background-position: 0 0, -1px -1px, -1px -1px;
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 40%, rgba(0, 0, 0, 0.55) 100%);
+  z-index: 0;
+}
+
+#root-shell { position: relative; z-index: 1; }
+
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+.hazard {
+  background-image: repeating-linear-gradient(-45deg, #ffb224 0 10px, #15110a 10px 20px);
+}
+
+@keyframes pulse-ring {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 92, 82, 0.7); }
+  50% { box-shadow: 0 0 0 4px rgba(255, 92, 82, 0); }
+}
+.seat-danger { animation: pulse-ring 1.6s ease-in-out infinite; }
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.rise { animation: rise 0.35s ease-out both; }
+
+@keyframes scan {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .seat-danger, .rise { animation: none; }
+  * { transition-duration: 0.01ms !important; transition-delay: 0ms !important; }
+}

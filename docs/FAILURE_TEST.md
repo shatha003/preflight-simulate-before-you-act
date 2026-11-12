@@ -43,3 +43,14 @@ The check is deliberately strict (zero tolerance). A false alarm costs one re-si
 - **A wrong rule, not wrong data.** If the policy thresholds are bad, the preview is accurate and the verdict is still wrong. The envelope protects against drift, not against bad policy.
 - **Effects outside the transaction.** A real payment processor or email provider cannot be rolled back by a database `ROLLBACK`. Preflight models them with a hold-then-release outbox, so they only leave after the hold window. That pattern is demonstrated, not integrated with a real provider.
 - **Preview and execution disagreeing in a way inside the envelope.** The UI reports whether the effect signature matched, but a mismatch that stays inside the envelope still commits (and is flagged, and undoable).
+
+
+## Failure test #2: a side effect the simulator never saw
+
+**Scenario.** Another team ships a migration while you review: triggers on `payments`, `outbox` and `customers` that copy every changed row into `trash`. The preview was taken before they existed, so it under-predicts the effect. This is the brief's "simulation under-predicts a side effect" case in its purest form.
+
+**Reproduce.** Run any action, click **Hidden side effect** under Fault injection, then press and hold **Hold to execute**.
+
+**Result.** The real run writes rows the preview never listed (`N rows in trash would be created, you approved M`). The guard rolls back and nothing is written. Clicking **Re-simulate with current data** now shows the trigger's effect, and the checklist item **Writes only what you asked for** fails with "N unrequested writes from a trigger".
+
+**Covered by tests.** `tests/engine.test.ts` runs this for refund, email and delete: the execution is rolled back, the database is byte-identical afterward, and a fresh simulation reports `unexpected-writes`.

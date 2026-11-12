@@ -28,6 +28,14 @@ export interface Metrics {
   destroyedPayments: number;
   destroyedPaymentCents: number;
   destroyedOrders: number;
+  unexpectedWrites: number;
+}
+
+export interface Check {
+  id: string;
+  label: string;
+  status: "pass" | "warn" | "fail" | "na";
+  detail: string;
 }
 
 export interface SideEffect {
@@ -46,6 +54,7 @@ export interface RiskReport {
   verdict: Verdict;
   metrics: Metrics;
   findings: Finding[];
+  checks: Check[];
   sideEffects: SideEffect[];
   rollback: RollbackStep[];
 }
@@ -74,6 +83,10 @@ export function assess(proposal: Proposal, diff: Diff, before: Snapshot): RiskRe
     (p) => p.status === "captured" && Date.parse(String(p.captured_at)) > retentionCutoff,
   );
 
+  // Rows written to `trash` that the requested action does not explain (a trigger the user never heard of).
+  const expectedTrash = proposal.action === "delete_inactive" ? diff.customers.deleted.length : 0;
+  const unexpectedWrites = Math.max(0, diff.trash.inserted.length - expectedTrash);
+
   const metrics: Metrics = {
     rowsTouched: countRows(diff),
     perTable,
@@ -85,6 +98,7 @@ export function assess(proposal: Proposal, diff: Diff, before: Snapshot): RiskRe
     destroyedPayments: destroyedCaptured.length,
     destroyedPaymentCents: destroyedCaptured.reduce((n, p) => n + Number(p.amount_cents), 0),
     destroyedOrders: diff.orders.deleted.length,
+    unexpectedWrites,
   };
 
   const findings: Finding[] = [];
@@ -153,6 +167,15 @@ export function assess(proposal: Proposal, diff: Diff, before: Snapshot): RiskRe
     });
   }
 
+  if (unexpectedWrites > 0) {
+    findings.push({
+      id: "unexpected-writes",
+      severity: "warn",
+      title: `${unexpectedWrites} writes you did not ask for`,
+      detail: `A trigger copied ${unexpectedWrites} rows into trash. They are not part of this request, so something else on this database is reacting to it.`,
+    });
+  }
+
   const sideEffects: SideEffect[] = [];
   if (proposal.action === "bulk_refund") {
     if (diff.payments.updated.length) sideEffects.push({ label: "Payments marked refunded", count: diff.payments.updated.length, via: "direct" });
@@ -169,6 +192,49 @@ export function assess(proposal: Proposal, diff: Diff, before: Snapshot): RiskRe
     if (diff.orders.deleted.length) sideEffects.push({ label: "Orders deleted (not archived)", count: diff.orders.deleted.length, via: "cascade" });
     if (diff.payments.deleted.length) sideEffects.push({ label: "Payments deleted (not archived)", count: diff.payments.deleted.length, via: "cascade" });
   }
+
+  if (unexpectedWrites > 0) sideEffects.push({ label: "Unrequested copies written to trash", count: unexpectedWrites, via: "trigger" });
+
+  const deletes = diff.customers.deleted.length + diff.orders.deleted.length + diff.payments.deleted.length > 0;
+  const campaignMsgs = messages.filter((m) => m.kind === "campaign").length;
+  const checks: Check[] = [
+    {
+      id: "opt-out",
+      label: "Respects marketing opt-outs",
+      status: campaignMsgs === 0 ? "na" : optedOutRecipients > 0 ? "fail" : "pass",
+      detail: campaignMsgs === 0 ? "No marketing email in this action" : optedOutRecipients > 0 ? `${optedOutRecipients} of ${campaignMsgs} recipients opted out` : `All ${campaignMsgs} recipients opted in`,
+    },
+    {
+      id: "retention",
+      label: "Keeps records inside the 12-month retention window",
+      status: !deletes ? "na" : metrics.destroyedPayments > 0 ? "fail" : "pass",
+      detail: !deletes ? "Nothing is deleted" : metrics.destroyedPayments > 0 ? `${metrics.destroyedPayments} payments (${usd(metrics.destroyedPaymentCents)}) would be destroyed` : "No recent financial records are destroyed",
+    },
+    {
+      id: "money",
+      label: `Money moved stays under ${usd(MONEY_WARN_CENTS)} (hard cap ${usd(MONEY_BLOCK_CENTS)})`,
+      status: moneyMovedCents === 0 ? "na" : moneyMovedCents > MONEY_BLOCK_CENTS ? "fail" : moneyMovedCents > MONEY_WARN_CENTS ? "warn" : "pass",
+      detail: moneyMovedCents === 0 ? "No money moves" : `${usd(moneyMovedCents)} moves`,
+    },
+    {
+      id: "blast",
+      label: "Touches at most half of all customers",
+      status: metrics.rowsTouched === 0 ? "na" : share > 0.5 ? "warn" : "pass",
+      detail: `${metrics.customersImpacted} of ${metrics.customersTotal} customers (${Math.round(share * 100)}%)`,
+    },
+    {
+      id: "recall",
+      label: "Emails can be recalled before delivery",
+      status: messages.length === 0 ? "na" : messages.length > 100 ? "warn" : "pass",
+      detail: messages.length === 0 ? "No email is sent" : `${messages.length} held for ${HOLD_SECONDS}s, then delivered for good`,
+    },
+    {
+      id: "contained",
+      label: "Writes only what you asked for",
+      status: metrics.rowsTouched === 0 ? "na" : unexpectedWrites > 0 ? "warn" : "pass",
+      detail: unexpectedWrites > 0 ? `${unexpectedWrites} unrequested writes from a trigger` : "Every changed row is explained by the request",
+    },
+  ];
 
   const rollback: RollbackStep[] = [
     {
@@ -198,5 +264,5 @@ export function assess(proposal: Proposal, diff: Diff, before: Snapshot): RiskRe
         ? "review"
         : "safe";
 
-  return { verdict, metrics, findings, sideEffects, rollback };
+  return { verdict, metrics, findings, checks, sideEffects, rollback };
 }

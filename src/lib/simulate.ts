@@ -3,6 +3,7 @@ import { ACTIONS, type Params, type Proposal } from "./actions";
 import { diffSnapshots, snapshot, type Diff, type Row, type Snapshot } from "./diff";
 import { assess, type RiskReport } from "./risk";
 import { TABLES, type TableName } from "./schema";
+import { sha256 } from "./audit";
 
 /** What the human approves. Execution must stay inside it or it rolls back. */
 export interface Envelope {
@@ -18,6 +19,9 @@ export interface Simulation {
   report: RiskReport;
   envelope: Envelope;
   signature: string;
+  digest: string;
+  sql: { text: string; params: unknown[] };
+  ms: number;
   at: number;
 }
 
@@ -67,16 +71,22 @@ export function simulate(db: Db, proposal: Proposal): Promise<Simulation> {
   return withLock(async () => {
     await db.exec("begin");
     try {
+      const t0 = performance.now();
       const before: Snapshot = await snapshot(db);
       await runAction(db, proposal);
       const after = await snapshot(db);
       const diff = diffSnapshots(before, after);
+      const ms = Math.round(performance.now() - t0);
+      const sig = signature(diff);
       return {
         proposal,
         diff,
         report: assess(proposal, diff, before),
         envelope: buildEnvelope(diff),
-        signature: signature(diff),
+        signature: sig,
+        digest: (await sha256(sig)).slice(0, 16),
+        sql: ACTIONS[proposal.action].sql(proposal.params),
+        ms,
         at: Date.now(),
       };
     } finally {

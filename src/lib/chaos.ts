@@ -40,3 +40,41 @@ export function concurrentWriter(db: Db, n = 40): Promise<number> {
     }
   });
 }
+
+/**
+ * Failure test #2: a side effect the simulator never saw. Another team ships a
+ * migration mid-review that adds triggers copying changed rows into `trash`.
+ * The preview was taken before it existed, so it under-predicts.
+ */
+export function shipHiddenTrigger(db: Db): Promise<void> {
+  return withLock(async () => {
+    await db.exec(`
+      create or replace function shadow_copy() returns trigger as $$
+      begin
+        if tg_op = 'DELETE' then
+          insert into trash(source, row_data) values (tg_table_name, to_jsonb(old));
+        else
+          insert into trash(source, row_data) values (tg_table_name, to_jsonb(new));
+        end if;
+        return null;
+      end $$ language plpgsql;
+      drop trigger if exists trg_shadow_payments on payments;
+      drop trigger if exists trg_shadow_outbox on outbox;
+      drop trigger if exists trg_shadow_customers on customers;
+      create trigger trg_shadow_payments after update on payments for each row execute function shadow_copy();
+      create trigger trg_shadow_outbox after insert on outbox for each row execute function shadow_copy();
+      create trigger trg_shadow_customers after delete on customers for each row execute function shadow_copy();
+    `);
+  });
+}
+
+export function removeHiddenTrigger(db: Db): Promise<void> {
+  return withLock(async () => {
+    await db.exec(`
+      drop trigger if exists trg_shadow_payments on payments;
+      drop trigger if exists trg_shadow_outbox on outbox;
+      drop trigger if exists trg_shadow_customers on customers;
+      drop function if exists shadow_copy();
+    `);
+  });
+}

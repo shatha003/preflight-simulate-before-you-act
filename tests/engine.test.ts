@@ -4,7 +4,7 @@ import { snapshot, type Snapshot } from "@/lib/diff";
 import { simulate, withParams } from "@/lib/simulate";
 import { execute } from "@/lib/execute";
 import { undo, deliverHeld } from "@/lib/undo";
-import { concurrentWriter } from "@/lib/chaos";
+import { concurrentWriter, shipHiddenTrigger, removeHiddenTrigger } from "@/lib/chaos";
 import { ACTIONS, type Proposal } from "@/lib/actions";
 import { appendAudit, verifyChain, type AuditEntry } from "@/lib/audit";
 import { previewTweaks } from "@/lib/tweaks";
@@ -103,6 +103,37 @@ describe("execute guard", () => {
       const res = await execute(db, sim);
       expect(res.status, p.action).toBe("rolled_back");
     }
+  });
+});
+
+describe("under-predicted side effect (hidden trigger)", () => {
+  it("is caught for all three actions, and a re-simulation then reveals it", async () => {
+    for (const p of [prop("bulk_refund", { sinceDays: 30 }), prop("send_campaign", { onlyOptedIn: true }), prop("delete_inactive", { keepWithRecentPayments: true })]) {
+      await resetDb(db);
+      const sim = await simulate(db, p);
+      expect(sim.report.metrics.unexpectedWrites, p.action).toBe(0);
+
+      await shipHiddenTrigger(db);
+      const s0 = plain(await snapshot(db));
+      const res = await execute(db, sim);
+      expect(res.status, p.action).toBe("rolled_back");
+      if (res.status === "rolled_back") expect(res.violations.some((v) => v.table === "trash"), p.action).toBe(true);
+      expect(plain(await snapshot(db)), p.action).toBe(s0);
+
+      const again = await simulate(db, p);
+      expect(again.report.findings.map((f) => f.id), p.action).toContain("unexpected-writes");
+      await removeHiddenTrigger(db);
+    }
+  });
+});
+
+describe("policy checklist", () => {
+  it("lists every rule, marking the ones that do not apply", async () => {
+    const sim = await simulate(db, prop("send_campaign"));
+    const by = Object.fromEntries(sim.report.checks.map((c) => [c.id, c.status]));
+    expect(by["opt-out"]).toBe("fail");
+    expect(by["retention"]).toBe("na");
+    expect(sim.report.checks).toHaveLength(6);
   });
 });
 

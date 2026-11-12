@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { Diff, Row } from "@/lib/diff";
 import { TABLES, type TableName } from "@/lib/schema";
-import { usd } from "./ui";
+import { usd } from "@/lib/format";
 
 const COLS: Record<TableName, string[]> = {
   customers: ["id", "name", "plan", "status", "marketing_opt_in"],
@@ -38,15 +38,20 @@ export function DiffView({ diff }: { diff: Diff }) {
     <div>
       <div className="mb-3 flex flex-wrap gap-1.5">
         {active.map((t) => {
-          const n = diff[t].inserted.length + diff[t].deleted.length + diff[t].updated.length;
+          const x = diff[t];
           return (
             <button
               key={t}
               type="button"
               onClick={() => setPick(t)}
-              className={`rounded-md border px-2.5 py-1 font-mono text-xs ${t === table ? "border-ink bg-ink text-bg" : "border-line bg-surface hover:bg-surface2"}`}
+              className={`rounded-md border px-2.5 py-1 font-mono text-xs ${t === table ? "border-amber bg-amber text-black" : "border-line2 bg-panel2 text-muted hover:text-ink"}`}
             >
-              {t} <span className="opacity-70">{n}</span>
+              {t}{" "}
+              <span className={t === table ? "" : "text-ink"}>
+                {x.deleted.length > 0 && <span className={t === table ? "" : "text-red"}>−{x.deleted.length} </span>}
+                {x.inserted.length > 0 && <span className={t === table ? "" : "text-green"}>+{x.inserted.length} </span>}
+                {x.updated.length > 0 && <span className={t === table ? "" : "text-amber"}>~{x.updated.length}</span>}
+              </span>
             </button>
           );
         })}
@@ -55,7 +60,7 @@ export function DiffView({ diff }: { diff: Diff }) {
       <div className="overflow-x-auto rounded-lg border border-line">
         <table className="w-full min-w-[520px] border-collapse font-mono text-xs">
           <thead>
-            <tr className="bg-surface2 text-left text-muted">
+            <tr className="bg-panel2 text-left text-dim">
               <th className="w-6 px-2 py-1.5" />
               {cols.map((c) => (
                 <th key={c} className="px-2 py-1.5 font-medium">{c}</th>
@@ -63,16 +68,17 @@ export function DiffView({ diff }: { diff: Diff }) {
             </tr>
           </thead>
           <tbody>
-            <Group rows={d.deleted} cols={cols} sign="−" cls="bg-del" />
-            <Group rows={d.inserted} cols={cols} sign="+" cls="bg-add" />
+            <Group rows={d.deleted} cols={cols} sign="−" cls="bg-red/10 text-red" />
+            <Group rows={d.inserted} cols={cols} sign="+" cls="bg-green/10 text-green" />
             {d.updated.slice(0, LIMIT).map((u) => (
               <tr key={`u${u.id}`} className="border-t border-line">
-                <td className="px-2 py-1.5 text-warn">~</td>
+                <td className="px-2 py-1.5 text-amber">~</td>
                 <td className="px-2 py-1.5">{u.id}</td>
                 <td className="px-2 py-1.5" colSpan={cols.length - 1}>
                   {u.changed.map((c) => (
                     <span key={c} className="mr-3">
-                      {c}: <span className="bg-del px-1 line-through">{fmt(c, u.before[c])}</span> → <span className="bg-add px-1">{fmt(c, u.after[c])}</span>
+                      <span className="text-dim">{c}:</span> <span className="bg-red/15 px-1 text-red line-through">{fmt(c, u.before[c])}</span>{" "}
+                      <span className="text-dim">→</span> <span className="bg-green/15 px-1 text-green">{fmt(c, u.after[c])}</span>
                     </span>
                   ))}
                 </td>
@@ -105,7 +111,7 @@ function Group({ rows, cols, sign, cls }: { rows: Row[]; cols: string[]; sign: s
 function More({ n, span }: { n: number; span: number }) {
   return (
     <tr className="border-t border-line">
-      <td colSpan={span} className="px-2 py-1.5 text-muted">+ {n} more rows</td>
+      <td colSpan={span} className="px-2 py-1.5 text-dim">+ {n} more rows</td>
     </tr>
   );
 }
