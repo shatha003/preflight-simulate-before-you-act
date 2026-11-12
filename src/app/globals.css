@@ -1,90 +1,151 @@
 @import "tailwindcss";
 
+/*
+ * Design read. "Preflight" is a print-production term: the check you run on a proof
+ * before the press runs. So the product is a press proof. Paper because a proof is
+ * paper; one red pen because proofreaders mark with one; blue pencil and highlighter
+ * only as the two other standard marks. Square corners because paper is square.
+ */
 :root {
-  --bg: #080b0f;
-  --panel: #0e1319;
-  --panel2: #131a22;
-  --line: #1d2630;
-  --line2: #2b3745;
-  --ink: #e9eef5;
-  --muted: #8794a6;
-  --dim: #566274;
-  --amber: #ffb224;
-  --green: #34d17b;
-  --red: #ff5c52;
-  --cyan: #52c6f0;
+  --desk: #cdc5b2;
+  --paper: #f6f1e5;
+  --paper2: #ebe4d1;
+  --ink: #1b1915;
+  --muted: #5b564b;
+  --rule: rgba(27, 25, 21, 0.24);
+  --red: #bf2a1c;
+  --blue: #2b4fa3;
+  --hi: #f2d84a;
 }
 
 @theme inline {
-  --color-bg: var(--bg);
-  --color-panel: var(--panel);
-  --color-panel2: var(--panel2);
-  --color-line: var(--line);
-  --color-line2: var(--line2);
+  --color-desk: var(--desk);
+  --color-paper: var(--paper);
+  --color-paper2: var(--paper2);
   --color-ink: var(--ink);
   --color-muted: var(--muted);
-  --color-dim: var(--dim);
-  --color-amber: var(--amber);
-  --color-green: var(--green);
+  --color-rule: var(--rule);
   --color-red: var(--red);
-  --color-cyan: var(--cyan);
-  --font-sans: var(--font-plex), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-plex-mono), ui-monospace, "Cascadia Code", monospace;
-  --font-display: var(--font-barlow), "Arial Narrow", sans-serif;
+  --color-blue: var(--blue);
+  --color-hi: var(--hi);
+  --font-sans: var(--font-news), Georgia, "Times New Roman", serif;
+  --font-type: var(--font-courier), "Courier New", monospace;
+  --font-hand: var(--font-caveat), "Segoe Print", cursive;
+  --font-slab: var(--font-slab), Rockwell, "Arial Black", serif;
 }
 
-html { color-scheme: dark; }
+html { color-scheme: light; }
 
 body {
-  background-color: var(--bg);
-  background-image:
-    radial-gradient(1200px 500px at 70% -10%, rgba(255, 178, 36, 0.07), transparent 60%),
-    linear-gradient(var(--line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--line) 1px, transparent 1px);
-  background-size: auto, 56px 56px, 56px 56px;
-  background-position: 0 0, -1px -1px, -1px -1px;
+  background-color: var(--desk);
+  /* paper grain, so the desk is a surface and not a flat fill */
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .1  0 0 0 0 .08  0 0 0 0 .05  0 0 0 .11 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
   color: var(--ink);
   font-family: var(--font-sans);
+  font-size: 17px;
+  line-height: 1.45;
   -webkit-font-smoothing: antialiased;
 }
 
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background: radial-gradient(ellipse at center, transparent 40%, rgba(0, 0, 0, 0.55) 100%);
-  z-index: 0;
-}
-
-#root-shell { position: relative; z-index: 1; }
+#root-shell { position: relative; }
 
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; }
-:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+::selection { background: var(--hi); color: var(--ink); }
 
-.hazard {
-  background-image: repeating-linear-gradient(-45deg, #ffb224 0 10px, #15110a 10px 20px);
+/* ---- The sheet: the one object that lifts off the desk ---- */
+.sheet {
+  background-color: var(--paper);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .3  0 0 0 0 .25  0 0 0 0 .1  0 0 0 .07 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.1), 0 22px 44px -22px rgba(50, 36, 10, 0.55);
 }
 
-@keyframes pulse-ring {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 92, 82, 0.7); }
-  50% { box-shadow: 0 0 0 4px rgba(255, 92, 82, 0); }
+/* ---- Ledger lines and the proofreader's marks laid over them ---- */
+.ledger { column-width: 150px; column-gap: 20px; column-fill: balance; }
+.ln {
+  display: flex;
+  gap: 0.6em;
+  break-inside: avoid;
+  font-family: var(--font-type);
+  font-size: 12.5px;
+  line-height: 18px;
+  white-space: nowrap;
 }
-.seat-danger { animation: pulse-ring 1.6s ease-in-out infinite; }
+.ln:hover { background: rgba(27, 25, 21, 0.07); }
+.ln .id { color: var(--muted); flex: none; }
+.ln .nm {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background-image: linear-gradient(var(--mk, transparent), var(--mk, transparent));
+  background-repeat: no-repeat;
+  background-position: 0 var(--mp, 58%);
+  background-size: 0% var(--mh, 2px);
+  transition: background-size 0.35s ease-out var(--d, 0ms), color 0.25s var(--d, 0ms);
+}
+/* deleted: struck through in red pen */
+.mark-delete .nm { --mk: var(--red); --mh: 1.7px; --mp: 58%; background-size: 100% 1.7px; color: var(--red); }
+/* refunded: highlighter */
+.mark-refund .nm { --mk: var(--hi); --mh: 66%; --mp: 70%; background-size: 100% 66%; }
+/* emailed: blue pencil, wavy underline */
+.mark-email .nm { color: var(--blue); text-decoration: underline wavy var(--blue) 1px; text-underline-offset: 3px; }
+/* the proofreader circles what they are worried about */
+.ringed .nm { outline: 1.6px solid var(--red); outline-offset: 1px; border-radius: 46% 54% 50% 50% / 68% 46% 62% 40%; padding: 0 0.3em; }
 
-@keyframes rise {
-  from { opacity: 0; transform: translateY(8px); }
+/* legend swatches reuse the same marks, so the key is the real thing */
+.key .nm { transition: none; background-size: 100% var(--mh, 2px); }
+
+/* ---- Rubber stamp ---- */
+.stamp {
+  display: inline-block;
+  font-family: var(--font-slab);
+  text-align: center;
+  padding: 0.2em 0.55em 0.3em;
+  border: 4px solid currentColor;
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+  transform: rotate(-6deg);
+  filter: url(#ink);
+  mix-blend-mode: multiply;
+  animation: slam 0.32s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+.stamp small {
+  display: block;
+  margin-top: 0.15em;
+  padding-top: 0.2em;
+  border-top: 2px solid currentColor;
+  font-family: var(--font-type);
+  font-weight: 700;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+}
+.stamp.pending { border-style: dashed; outline: none; filter: none; animation: none; opacity: 0.7; mix-blend-mode: normal; }
+@keyframes slam {
+  0% { opacity: 0; transform: rotate(-6deg) scale(1.9); }
+  60% { opacity: 1; transform: rotate(-6deg) scale(0.95); }
+  100% { opacity: 1; transform: rotate(-6deg) scale(1); }
+}
+
+/* the sheet takes the hit when the stamp lands */
+@keyframes thud { 0%, 100% { transform: none; } 40% { transform: translateY(2px); } }
+.thud { animation: thud 0.25s 0.12s ease-out; }
+
+/* ---- Margin handwriting ---- */
+.hand { font-family: var(--font-hand); color: var(--red); line-height: 1.15; }
+
+/* ---- Small helpers ---- */
+.leader { flex: 1; border-bottom: 1.5px dotted rgba(27, 25, 21, 0.45); transform: translateY(-4px); min-width: 12px; }
+.tag { border: 1px solid currentColor; padding: 0 0.4em; font-style: italic; font-size: 0.85rem; }
+
+@keyframes settle {
+  from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: none; }
 }
-.rise { animation: rise 0.35s ease-out both; }
-
-@keyframes scan {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
-}
+.settle { animation: settle 0.3s ease-out both; }
 
 @media (prefers-reduced-motion: reduce) {
-  .seat-danger, .rise { animation: none; }
-  * { transition-duration: 0.01ms !important; transition-delay: 0ms !important; }
+  .stamp, .thud, .settle { animation: none; }
+  .ln .nm { transition: none; }
 }

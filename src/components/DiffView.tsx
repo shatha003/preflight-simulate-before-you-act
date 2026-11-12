@@ -25,60 +25,57 @@ function fmt(col: string, v: unknown): string {
 
 const LIMIT = 6;
 
+/** The redline: struck rows are deleted, highlighted rows are added, blue pencil shows what changed in place. */
 export function DiffView({ diff }: { diff: Diff }) {
   const active = TABLES.filter((t) => diff[t].inserted.length + diff[t].deleted.length + diff[t].updated.length > 0);
   const [pick, setPick] = useState<TableName | null>(null);
   const table = pick && active.includes(pick) ? pick : active[0];
 
-  if (!table) return <p className="text-sm text-muted">No rows change.</p>;
+  if (!table) return <p className="italic text-muted">No rows change.</p>;
   const d = diff[table];
   const cols = COLS[table];
 
   return (
     <div>
-      <div className="mb-3 flex flex-wrap gap-1.5">
+      <div className="mb-3 flex flex-wrap gap-x-5 gap-y-1 font-type text-[13px]">
         {active.map((t) => {
           const x = diff[t];
+          const on = t === table;
           return (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setPick(t)}
-              className={`rounded-md border px-2.5 py-1 font-mono text-xs ${t === table ? "border-amber bg-amber text-black" : "border-line2 bg-panel2 text-muted hover:text-ink"}`}
-            >
+            <button key={t} type="button" onClick={() => setPick(t)} className={`pb-0.5 ${on ? "border-b-2 border-ink font-bold" : "border-b-2 border-transparent text-muted hover:text-ink"}`}>
               {t}{" "}
-              <span className={t === table ? "" : "text-ink"}>
-                {x.deleted.length > 0 && <span className={t === table ? "" : "text-red"}>−{x.deleted.length} </span>}
-                {x.inserted.length > 0 && <span className={t === table ? "" : "text-green"}>+{x.inserted.length} </span>}
-                {x.updated.length > 0 && <span className={t === table ? "" : "text-amber"}>~{x.updated.length}</span>}
-              </span>
+              {x.deleted.length > 0 && <span className="text-red">−{x.deleted.length} </span>}
+              {x.inserted.length > 0 && <span>+{x.inserted.length} </span>}
+              {x.updated.length > 0 && <span className="text-blue">~{x.updated.length}</span>}
             </button>
           );
         })}
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-line">
-        <table className="w-full min-w-[520px] border-collapse font-mono text-xs">
+      <div className="overflow-x-auto border-y border-ink/60">
+        <table className="w-full min-w-[520px] border-collapse font-type text-[12.5px]">
           <thead>
-            <tr className="bg-panel2 text-left text-dim">
+            <tr className="text-left text-muted">
               <th className="w-6 px-2 py-1.5" />
               {cols.map((c) => (
-                <th key={c} className="px-2 py-1.5 font-medium">{c}</th>
+                <th key={c} className="px-2 py-1.5 font-normal italic">
+                  {c}
+                </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            <Group rows={d.deleted} cols={cols} sign="−" cls="bg-red/10 text-red" />
-            <Group rows={d.inserted} cols={cols} sign="+" cls="bg-green/10 text-green" />
+            <Group rows={d.deleted} cols={cols} sign="−" kind="del" />
+            <Group rows={d.inserted} cols={cols} sign="+" kind="add" />
             {d.updated.slice(0, LIMIT).map((u) => (
-              <tr key={`u${u.id}`} className="border-t border-line">
-                <td className="px-2 py-1.5 text-amber">~</td>
+              <tr key={`u${u.id}`} className="border-t border-rule">
+                <td className="px-2 py-1.5 text-blue">~</td>
                 <td className="px-2 py-1.5">{u.id}</td>
                 <td className="px-2 py-1.5" colSpan={cols.length - 1}>
                   {u.changed.map((c) => (
-                    <span key={c} className="mr-3">
-                      <span className="text-dim">{c}:</span> <span className="bg-red/15 px-1 text-red line-through">{fmt(c, u.before[c])}</span>{" "}
-                      <span className="text-dim">→</span> <span className="bg-green/15 px-1 text-green">{fmt(c, u.after[c])}</span>
+                    <span key={c} className="mr-4">
+                      <span className="text-muted">{c}:</span> <span className="text-red line-through decoration-[1.5px]">{fmt(c, u.before[c])}</span> <span className="text-muted">→</span>{" "}
+                      <span className="bg-hi px-1 text-ink">{fmt(c, u.after[c])}</span>
                     </span>
                   ))}
                 </td>
@@ -92,14 +89,16 @@ export function DiffView({ diff }: { diff: Diff }) {
   );
 }
 
-function Group({ rows, cols, sign, cls }: { rows: Row[]; cols: string[]; sign: string; cls: string }) {
+function Group({ rows, cols, sign, kind }: { rows: Row[]; cols: string[]; sign: string; kind: "del" | "add" }) {
   return (
     <>
       {rows.slice(0, LIMIT).map((r) => (
-        <tr key={`${sign}${r.id}`} className={`border-t border-line ${cls}`}>
-          <td className="px-2 py-1.5 font-semibold">{sign}</td>
+        <tr key={`${sign}${r.id}`} className="border-t border-rule">
+          <td className={`px-2 py-1.5 font-bold ${kind === "del" ? "text-red" : ""}`}>{sign}</td>
           {cols.map((c) => (
-            <td key={c} className="max-w-[260px] truncate px-2 py-1.5">{fmt(c, r[c])}</td>
+            <td key={c} className={`max-w-[260px] truncate px-2 py-1.5 ${kind === "del" ? "text-red line-through decoration-[1.5px]" : ""}`}>
+              {kind === "add" ? <span className="bg-hi px-0.5">{fmt(c, r[c])}</span> : fmt(c, r[c])}
+            </td>
           ))}
         </tr>
       ))}
@@ -110,8 +109,10 @@ function Group({ rows, cols, sign, cls }: { rows: Row[]; cols: string[]; sign: s
 
 function More({ n, span }: { n: number; span: number }) {
   return (
-    <tr className="border-t border-line">
-      <td colSpan={span} className="px-2 py-1.5 text-dim">+ {n} more rows</td>
+    <tr className="border-t border-rule">
+      <td colSpan={span} className="px-2 py-1.5 italic text-muted">
+        and {n} more rows
+      </td>
     </tr>
   );
 }

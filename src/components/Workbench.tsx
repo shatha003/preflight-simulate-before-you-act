@@ -13,13 +13,13 @@ import { HOLD_SECONDS } from "@/lib/risk";
 import { parseIntentRules } from "@/lib/intent";
 import { buildSeats, type Roster } from "@/lib/field";
 import { usd } from "@/lib/format";
-import { Button, Chip, Panel, verdictMeta } from "./ui";
-import { Flap } from "./Flap";
-import { HoldButton } from "./HoldButton";
-import { Field, type FieldMode } from "./Field";
-import { Checklist } from "./Checklist";
+import { Button, CropMarks, Label, Registration, Tag, verdictMeta } from "./ui";
+import { Stamp } from "./Stamp";
+import { SignOff } from "./SignOff";
+import { Ledger, type FieldMode } from "./Ledger";
+import { Notes } from "./Notes";
 import { DiffView } from "./DiffView";
-import { BlackBox, Receipts, RollbackPlan } from "./Panels";
+import { PressLog, Receipts, RollbackPlan } from "./Panels";
 
 const EXAMPLES = [
   "Delete accounts that have been inactive for 6 months",
@@ -56,6 +56,8 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 type Tab = "diff" | "sql" | "rollback" | "box";
 type Stale = { drift: boolean; trigger: boolean };
+
+const underline = "border-b border-ink bg-transparent px-1 py-0.5 outline-none focus:border-b-2";
 
 export function Workbench() {
   const dbRef = useRef<Db | null>(null);
@@ -160,7 +162,7 @@ export function Workbench() {
     return () => clearInterval(id);
   }, [ready, refresh]);
 
-  /** Show reality first, then flip to the simulation so the blast radius ripples out. */
+  /** Show the ledger as it stands, then lay the proof over it so the marks draw down the page. */
   const reveal = useCallback(() => {
     if (modeTimer.current) clearTimeout(modeTimer.current);
     setMode("reality");
@@ -229,7 +231,7 @@ export function Workbench() {
   function chooseAction(id: ActionId) {
     const p: Proposal = { action: id, params: { ...ACTIONS[id].defaults } };
     setProposal(p);
-    setSource("chosen manually");
+    setSource("chosen by hand");
     void runSim(p);
   }
 
@@ -355,7 +357,7 @@ export function Workbench() {
     const url = URL.createObjectURL(new Blob([JSON.stringify(doc, null, 2)], { type: "application/json" }));
     const a = document.createElement("a");
     a.href = url;
-    a.download = `preflight-flight-record-${Date.now()}.json`;
+    a.download = `preflight-press-log-${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -376,33 +378,31 @@ export function Workbench() {
       setTab("diff");
       await say(1, "Agents are starting to write to real systems. “Are you sure?” is not a safety story. Watch what happens before it happens.", 4200);
       setText(DEMO_TEXT);
-      await say(2, "I ask the agent to clean up dormant accounts. Preflight runs it for real on a copy, inside a transaction.", 600);
+      await say(2, "I ask the agent to clean up dormant accounts. Preflight runs it for real on a copy, inside a transaction, then marks up the ledger.", 600);
       await propose(DEMO_TEXT);
-      await say(3, "Every square is a customer. Red ones would be deleted. The database found the cascade into payments. No model guessed it.", 5200);
-      await say(4, "Policy runs on what actually changed. The retention rule fails. Takeoff is denied.", 4200);
+      await say(3, "Every line is a customer. Struck-through names would be deleted, circled ones are the danger. The database found the cascade into payments. No model guessed it.", 5600);
+      await say(4, "Policy ran on what actually changed. The retention rule fails, and the proof is stamped KILLED.", 4200);
       const fix = previewsRef.current.find((p) => p.tweak.patch.keepWithRecentPayments === true);
       if (fix) {
-        await say(5, "A safer plan was already simulated. I use it, and the verdict drops from denied to hold.", 600);
+        await say(5, "A safer job was already simulated. I use it, and the stamp changes from killed to hold.", 600);
         await applyTweak(fix.tweak.patch);
         await sleep(3200);
       }
-      await say(6, "Now the failure case. While I review, another writer imports 40 customers. My preview is stale.", 600);
+      await say(6, "Now the failure case. While I review, another writer imports 40 customers. My proof is stale.", 600);
       await injectDrift();
       await sleep(2600);
-      await say(7, "I approve anyway. The real run is measured against exactly what I approved. It is bigger, so it rolls back. Nothing is written.", 600);
+      await say(7, "I sign off anyway. The real run is measured against exactly what I approved. It is bigger, so it rolls back. Nothing is written.", 600);
       await approve();
       await sleep(5200);
-      await say(8, "Re-simulate on current data, execute, and if I regret it, one click restores every row.", 600);
-      if (proposal || simRef.current) {
-        const p = simRef.current?.proposal ?? proposal;
-        if (p) await runSim(p, "re-simulated");
-      }
+      await say(8, "Pull a fresh proof, sign off, and if I regret it, one click restores every row.", 600);
+      const p = simRef.current?.proposal ?? proposal;
+      if (p) await runSim(p, "re-simulated");
       await sleep(3000);
       await approve();
       await sleep(3200);
       await undoLast();
       await sleep(2400);
-      await say(9, "Simulate first. Commit second. Every step is in a hash-chained flight record.", 4200);
+      await say(9, "Simulate first. Commit second. Every step is in a hash-chained press log.", 4200);
     } catch {
       // stopped by the user
     } finally {
@@ -416,77 +416,85 @@ export function Workbench() {
   };
 
   const seats = useMemo(() => buildSeats(roster, sim), [roster, sim]);
-  const meta = verdictMeta[sim ? sim.report.verdict : "idle"];
   const m = sim?.report.metrics;
   const recallLeft = Math.max(0, Math.ceil((committedAt + HOLD_SECONDS * 1000 - now) / 1000));
-  const flightNo = `PF-${String(audit.filter((a) => a.type === "intent").length + 1).padStart(4, "0")}`;
   const verdict = sim?.report.verdict;
-  const canTakeoff = (verdict === "safe" || verdict === "review") && !result;
+  const vKey = (result ? (result.status === "rolled_back" ? "stopped" : undone ? "recalled" : "printed") : (verdict ?? "idle")) as keyof typeof verdictMeta;
+  const meta = verdictMeta[vKey];
+  const canSign = (verdict === "safe" || verdict === "review") && !result;
+  const jobNo = `PF-${String(audit.filter((a) => a.type === "intent").length + 1).padStart(4, "0")}`;
+  const staleNote = (stale.drift || stale.trigger) && !result;
 
   return (
-    <div className="mx-auto max-w-[1320px] px-4 pb-40 pt-5 sm:px-6">
-      {/* Header */}
-      <header className="mb-5 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden className="text-amber">
-            <rect x="1" y="1" width="32" height="32" rx="8" fill="none" stroke="currentColor" strokeWidth="1.5" />
-            <path d="M17 6v22" stroke="currentColor" strokeWidth="2" strokeDasharray="3 3" />
-            <path d="M11 28l6-22 6 22" stroke="currentColor" strokeWidth="1.5" fill="none" />
-          </svg>
+    <div className="mx-auto max-w-[1280px] px-4 pb-48 pt-6 sm:px-8">
+      {/* Masthead */}
+      <header className="mb-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+        <div className="flex items-start gap-3.5">
+          <span className="mt-2"><Registration size={38} /></span>
           <div>
-            <h1 className="font-display text-[28px] font-bold uppercase leading-none tracking-[0.12em]">Preflight</h1>
-            <p className="mt-0.5 text-xs text-muted">Simulate before you act. See who an action hits before it happens.</p>
+            <h1 className="text-[44px] font-semibold italic leading-none tracking-tight">Preflight</h1>
+            <p className="mt-1 text-[16px] text-muted">Pull a proof before the press runs. See who an action hits before it happens.</p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Chip tone={ready ? "green" : "amber"}>{ready ? "● Postgres online, in this tab" : "○ starting Postgres…"}</Chip>
-          <Chip>{flightNo}</Chip>
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[15px]">
+          <span className="italic text-muted">{ready ? "Postgres is running in this tab" : "Starting Postgres…"}</span>
           {demo ? (
-            <Button variant="danger" onClick={stopDemo}>■ Stop demo</Button>
+            <Button variant="danger" onClick={stopDemo}>
+              Stop demo
+            </Button>
           ) : (
-            <Button variant="primary" onClick={() => void runDemo()} disabled={!ready || busy}>▶ Run the 90-second demo</Button>
+            <Button variant="primary" onClick={() => void runDemo()} disabled={!ready || busy}>
+              Run the 90-second demo
+            </Button>
           )}
         </div>
       </header>
 
       {error && (
-        <div role="alert" className="mb-4 rounded-xl border border-red/50 bg-red/10 px-4 py-3 text-sm text-red">
+        <div role="alert" className="mb-5 border-2 border-red px-4 py-3 text-red">
           {error}
         </div>
       )}
 
-      {/* Flight plan */}
-      <Panel label="Flight plan" aside={<span className="font-mono text-[11px] text-dim">{source}</span>} className="mb-5">
+      {/* Job order */}
+      <section aria-label="Job order" className="mb-8 border border-ink/70 bg-paper px-5 py-4 shadow-[3px_3px_0_rgba(27,25,21,0.25)] sm:px-6">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+          <h2 className="whitespace-nowrap text-[20px] font-semibold italic">Job order</h2>
+          <span className="font-type text-[12.5px] text-muted">
+            {jobNo}
+            {source ? ` · ${source}` : ""}
+          </span>
+        </div>
         <form
           onSubmit={(e) => {
             e.preventDefault();
             void propose(text);
           }}
-          className="flex flex-col gap-2 sm:flex-row"
+          className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-end"
         >
-          <label htmlFor="intent" className="sr-only">What should the agent do?</label>
-          <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-line2 bg-bg/70 px-3 focus-within:border-amber">
-            <span className="font-mono text-amber" aria-hidden>›</span>
-            <input
-              id="intent"
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder="Tell the agent what to do, e.g. “Delete accounts inactive for 6 months”"
-              className="min-w-0 flex-1 bg-transparent py-2.5 text-[15px] outline-none placeholder:text-dim"
-            />
-          </div>
-          <Button variant="primary" onClick={() => void propose(text)} disabled={!ready || busy || !text.trim()} className="sm:w-36">
-            Simulate
+          <label htmlFor="intent" className="sr-only">
+            What should the agent do?
+          </label>
+          <input
+            id="intent"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="What should the agent do? For example: delete accounts inactive for 6 months"
+            className="min-w-0 flex-1 border-b-2 border-ink bg-transparent py-1.5 text-[20px] outline-none placeholder:text-muted/80 focus:border-blue"
+          />
+          <Button variant="primary" onClick={() => void propose(text)} disabled={!ready || busy || !text.trim()} className="sm:w-40">
+            Pull a proof
           </Button>
         </form>
-        <div className="mt-2.5 flex flex-wrap gap-1.5">
+        <div className="mt-3 flex flex-wrap items-baseline gap-x-1 gap-y-1 text-[15px]">
+          <span className="italic text-muted">Or pick one up from the spike:</span>
           {EXAMPLES.map((ex) => (
             <button
               key={ex}
               type="button"
               disabled={!ready || busy}
               onClick={() => void propose(ex)}
-              className="rounded-full border border-line2 px-3 py-1 text-left text-xs text-muted transition hover:border-amber hover:text-ink disabled:opacity-40"
+              className="px-1.5 text-left underline decoration-ink/40 decoration-1 underline-offset-4 enabled:hover:decoration-ink disabled:opacity-40"
             >
               {ex}
             </button>
@@ -494,37 +502,39 @@ export function Workbench() {
         </div>
 
         {proposal && (
-          <div className="mt-4 grid gap-3 border-t border-line pt-4 lg:grid-cols-[auto_1fr]">
-            <div className="flex gap-1.5 self-start" role="group" aria-label="Action">
+          <div className="mt-4 grid gap-x-8 gap-y-3 border-t border-rule pt-3 lg:grid-cols-[auto_1fr]">
+            <div className="flex flex-wrap gap-x-5 gap-y-1 self-start" role="group" aria-label="Type of job">
               {ACTION_LIST.map((a) => (
                 <button
                   key={a.id}
                   type="button"
                   onClick={() => chooseAction(a.id)}
                   aria-pressed={proposal.action === a.id}
-                  className={`rounded-lg border px-3 py-1.5 font-display text-[15px] font-semibold uppercase tracking-wider transition ${proposal.action === a.id ? "border-amber bg-amber text-black" : "border-line2 text-muted hover:text-ink"}`}
+                  className={`pb-0.5 text-[17px] ${proposal.action === a.id ? "border-b-2 border-ink font-semibold" : "border-b-2 border-transparent text-muted hover:text-ink"}`}
                 >
                   {a.label}
                 </button>
               ))}
             </div>
-            <div className="flex flex-wrap items-end gap-x-5 gap-y-2.5">
+            <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
               {ACTIONS[proposal.action].fields.map((f) => {
                 const v = proposal.params[f.key];
                 const id = `p-${f.key}`;
                 if (f.type === "boolean") {
                   return (
-                    <label key={f.key} className="flex items-center gap-2 pb-1.5 text-sm">
-                      <input type="checkbox" checked={Boolean(v)} onChange={(e) => editParam(f.key, e.target.checked)} className="h-4 w-4 accent-[var(--amber)]" />
+                    <label key={f.key} className="flex items-center gap-2 pb-0.5 text-[16px]">
+                      <input type="checkbox" checked={Boolean(v)} onChange={(e) => editParam(f.key, e.target.checked)} className="h-4 w-4 accent-[var(--ink)]" />
                       {f.label}
                     </label>
                   );
                 }
                 return (
-                  <div key={f.key} className="text-sm">
-                    <label htmlFor={id} className="mb-1 block font-mono text-[10px] uppercase tracking-wider text-dim">{f.label}</label>
+                  <div key={f.key} className="text-[16px]">
+                    <label htmlFor={id} className="block text-[14px] italic text-muted">
+                      {f.label}
+                    </label>
                     {f.type === "select" ? (
-                      <select id={id} value={String(v)} onChange={(e) => editParam(f.key, e.target.value)} className="rounded-lg border border-line2 bg-bg/70 px-2.5 py-1.5">
+                      <select id={id} value={String(v)} onChange={(e) => editParam(f.key, e.target.value)} className={underline}>
                         {f.options!.map((o) => (
                           <option key={o}>{o}</option>
                         ))}
@@ -536,7 +546,7 @@ export function Workbench() {
                         min={0}
                         value={String(v)}
                         onChange={(e) => editParam(f.key, f.type === "number" ? Number(e.target.value) : e.target.value)}
-                        className={`rounded-lg border border-line2 bg-bg/70 px-2.5 py-1.5 ${f.type === "number" ? "w-28" : "w-64"}`}
+                        className={`${underline} font-type text-[15px] ${f.type === "number" ? "w-24" : "w-[24rem] max-w-full"}`}
                       />
                     )}
                   </div>
@@ -545,37 +555,58 @@ export function Workbench() {
             </div>
           </div>
         )}
-      </Panel>
+      </section>
 
-      {/* Outcome banner */}
-      {result && <ResultBanner result={result} undone={undone} recallLeft={recallLeft} busy={busy} onUndo={() => void undoLast()} onResim={() => sim && void runSim(sim.proposal)} onDone={() => { putResult(null); putSim(null); setProposal(null); setMode("reality"); }} />}
+      {result && (
+        <ResultBanner
+          result={result}
+          undone={undone}
+          recallLeft={recallLeft}
+          busy={busy}
+          onUndo={() => void undoLast()}
+          onResim={() => sim && void runSim(sim.proposal)}
+          onDone={() => {
+            putResult(null);
+            putSim(null);
+            setProposal(null);
+            setMode("reality");
+          }}
+        />
+      )}
 
-      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-5 lg:grid-cols-[minmax(0,1fr)_400px]">
-        {/* Left: manifest + tabs */}
-        <div className="space-y-5">
-          <Panel label={`Manifest · ${roster.length} customers`}>
-            <Field seats={seats} mode={mode} onMode={setMode} hasSim={Boolean(sim)} />
-            {(stale.drift || stale.trigger) && !result && (
-              <div role="status" className="mt-3 rounded-lg border border-amber/50 bg-amber/10 px-3 py-2 text-sm text-amber">
-                <strong>This preview is stale.</strong>{" "}
-                {stale.drift && "Another writer added customers while you were reviewing. "}
-                {stale.trigger && "A migration shipped a trigger the simulator never saw. "}
-                Approving will compare the real effect with this preview.
-              </div>
-            )}
-          </Panel>
+      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-10 lg:grid-cols-[minmax(0,1fr)_340px]">
+        {/* The proof sheet */}
+        <article key={sim ? sim.digest : "blank"} className={`sheet relative px-5 py-6 sm:px-9 sm:py-8 ${sim ? "thud" : ""}`}>
+          <CropMarks />
+          <header className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-[28px] font-semibold italic leading-tight">Customer ledger</h2>
+            <span className="font-type text-[12.5px] text-muted">
+              {jobNo} · {roster.length} names · proof of {sim ? ACTIONS[sim.proposal.action].label.toLowerCase() : "nothing yet"}
+            </span>
+          </header>
+
+          {staleNote && (
+            <div role="status" className="hand mb-3 text-[22px]">
+              This proof is stale.{" "}
+              {stale.drift && "Another writer added customers while I was reviewing. "}
+              {stale.trigger && "A migration shipped a trigger the simulator never saw. "}
+              Signing off will compare the real run against this proof.
+            </div>
+          )}
+
+          <Ledger seats={seats} mode={mode} onMode={setMode} hasSim={Boolean(sim)} />
 
           {sim && (
-            <Panel
-              label="Evidence"
-              aside={
-                <div role="tablist" className="flex gap-1" aria-label="Evidence">
+            <section className="mt-9 border-t-2 border-ink pt-3" aria-label="Overleaf">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+                <h3 className="text-[20px] font-semibold italic">Overleaf: the evidence</h3>
+                <div role="tablist" aria-label="Evidence" className="flex flex-wrap gap-x-5">
                   {(
                     [
-                      ["diff", "Before → after"],
+                      ["diff", "Row by row"],
                       ["sql", "SQL receipt"],
                       ["rollback", "Rollback plan"],
-                      ["box", "Flight record"],
+                      ["box", "Press log"],
                     ] as const
                   ).map(([k, l]) => (
                     <button
@@ -584,168 +615,192 @@ export function Workbench() {
                       role="tab"
                       aria-selected={tab === k}
                       onClick={() => setTab(k)}
-                      className={`rounded-md px-2.5 py-1 font-display text-[13px] font-semibold uppercase tracking-wider ${tab === k ? "bg-panel2 text-amber" : "text-dim hover:text-ink"}`}
+                      className={`pb-0.5 ${tab === k ? "border-b-2 border-ink font-semibold" : "border-b-2 border-transparent text-muted hover:text-ink"}`}
                     >
                       {l}
                     </button>
                   ))}
                 </div>
-              }
-            >
-              {tab === "diff" && (
-                <>
-                  <DiffView diff={sim.diff} />
-                  {sim.report.sideEffects.length > 0 && (
-                    <ul className="mt-4 divide-y divide-line rounded-lg border border-line text-sm">
-                      {sim.report.sideEffects.map((s) => (
-                        <li key={s.label} className="flex items-center justify-between gap-3 px-3 py-2">
-                          <span>{s.label}</span>
-                          <span className="flex items-center gap-2">
-                            <Chip tone={s.via === "direct" ? "muted" : s.via === "cascade" ? "red" : "amber"}>{s.via}</Chip>
-                            <span className="font-mono tabular-nums">{s.count}</span>
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </>
-              )}
-              {tab === "sql" && <Receipts sim={sim} />}
-              {tab === "rollback" && <RollbackPlan sim={sim} />}
-              {tab === "box" && <BlackBox audit={audit} ok={chainOk} onExport={exportRecord} />}
-            </Panel>
+              </div>
+              <div className="mt-4">
+                {tab === "diff" && (
+                  <>
+                    <DiffView diff={sim.diff} />
+                    {sim.report.sideEffects.length > 0 && (
+                      <ul className="mt-5 border-y border-ink/60">
+                        {sim.report.sideEffects.map((s) => (
+                          <li key={s.label} className="flex items-baseline justify-between gap-3 border-t border-rule px-1 py-1.5 first:border-t-0">
+                            <span>{s.label}</span>
+                            <span className="flex items-baseline gap-3">
+                              <Tag tone={s.via === "direct" ? "ink" : s.via === "cascade" ? "red" : "blue"}>{s.via}</Tag>
+                              <span className="font-type tabular-nums">{s.count}</span>
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </>
+                )}
+                {tab === "sql" && <Receipts sim={sim} />}
+                {tab === "rollback" && <RollbackPlan sim={sim} />}
+                {tab === "box" && <PressLog audit={audit} ok={chainOk} onExport={exportRecord} />}
+              </div>
+            </section>
           )}
-          {!sim && (
-            <Panel label="Flight record" aside={<span className={`font-mono text-[11px] ${chainOk ? "text-green" : "text-red"}`}>{chainOk ? "● chain verified" : "● chain broken"}</span>}>
-              <BlackBox audit={audit} ok={chainOk} onExport={exportRecord} />
-            </Panel>
-          )}
-        </div>
 
-        {/* Right: clearance */}
-        <div className="space-y-5">
-          <Panel label="Clearance" tone={verdict === "blocked" ? "red" : verdict === "safe" ? "green" : verdict === "review" ? "amber" : undefined} className={sim ? meta.glow : ""}>
-            <Flap text={meta.word} className={meta.color} />
-            <p className="mt-3 text-sm font-medium">{sim ? headline(sim) : "Pick a flight plan. Nothing has been simulated yet."}</p>
-            <p className="mt-0.5 text-xs text-muted">{sim ? ACTIONS[sim.proposal.action].describe(sim.proposal.params) : "Nothing is written until you approve."}</p>
+          {!sim && (
+            <section className="mt-9 border-t-2 border-ink pt-3" aria-label="Press log">
+              <h3 className="mb-3 text-[20px] font-semibold italic">Press log</h3>
+              <PressLog audit={audit} ok={chainOk} onExport={exportRecord} />
+            </section>
+          )}
+        </article>
+
+        {/* The desk: verdict, notes, alternatives, sabotage */}
+        <aside className="space-y-9">
+          <section aria-label="Verdict">
+            <div className="mb-4 flex justify-center py-2">
+              <Stamp key={vKey + (sim?.digest ?? "")} verdict={vKey} />
+            </div>
+            <p className="text-[19px] font-medium leading-snug">{sim ? headline(sim) : "Nothing has been simulated yet."}</p>
+            <p className="mt-1 text-[15.5px] italic text-muted">{sim ? ACTIONS[sim.proposal.action].describe(sim.proposal.params) : "Nothing is written until you sign off."}</p>
             {m && (
-              <dl className="mt-4 grid grid-cols-2 gap-2">
-                {[
-                  ["Customers hit", `${m.customersImpacted}`, `of ${m.customersTotal}`, m.customersImpacted / (m.customersTotal || 1) > 0.5],
-                  ["Rows changed", `${m.rowsTouched}`, "", false],
-                  ["Money moved", usd(m.moneyMovedCents), "", m.moneyMovedCents > 200_000],
-                  ["Emails queued", `${m.messagesQueued}`, m.optedOutRecipients ? `${m.optedOutRecipients} opted out` : "", m.optedOutRecipients > 0],
-                ].map(([k, v, sub, hot]) => (
-                  <div key={String(k)} className="rounded-lg border border-line bg-bg/60 px-3 py-2">
-                    <dt className="font-mono text-[10px] uppercase tracking-wider text-dim">{k}</dt>
-                    <dd className={`font-mono text-xl tabular-nums ${hot ? "text-amber" : ""}`}>{v}</dd>
-                    {sub && <div className={`text-[11px] ${hot ? "text-amber" : "text-muted"}`}>{sub}</div>}
-                  </div>
-                ))}
+              <dl className="mt-4 space-y-1.5 text-[16px]">
+                <Leader k="Customers hit" v={`${m.customersImpacted} of ${m.customersTotal}`} hot={m.customersImpacted / (m.customersTotal || 1) > 0.5} />
+                <Leader k="Rows changed" v={String(m.rowsTouched)} />
+                <Leader k="Money moving" v={usd(m.moneyMovedCents)} hot={m.moneyMovedCents > 200_000} />
+                <Leader k="Emails queued" v={m.optedOutRecipients ? `${m.messagesQueued} (${m.optedOutRecipients} opted out)` : String(m.messagesQueued)} hot={m.optedOutRecipients > 0} />
               </dl>
             )}
-          </Panel>
+          </section>
 
           {sim && (
-            <Panel label="Pre-flight checklist">
-              <Checklist checks={sim.report.checks} />
-            </Panel>
+            <section aria-label="Proofreader's notes">
+              <h3 className="mb-3 border-b border-rule pb-1 text-[20px] font-semibold italic">Proofreader&rsquo;s notes</h3>
+              <Notes checks={sim.report.checks} />
+            </section>
           )}
 
           {sim && (previews.length > 0 || previewing) && (
-            <Panel label="Safer plans, already simulated" aside={previewing ? <span className="font-mono text-[11px] text-dim">simulating…</span> : undefined}>
-              <ul className="space-y-2">
+            <section aria-label="Safer jobs">
+              <h3 className="mb-1 border-b border-rule pb-1 text-[20px] font-semibold italic">Safer jobs, already proofed</h3>
+              {previewing && <Label>Running the alternatives…</Label>}
+              <ul className="mt-2 space-y-4">
                 {previews.map((p) => (
-                  <li key={p.tweak.label} className="rounded-lg border border-line bg-bg/60 p-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium">{p.tweak.label}</div>
-                        <div className="text-xs text-muted">{p.tweak.why}</div>
-                      </div>
-                      <Chip tone={p.verdict === "safe" ? "green" : p.verdict === "review" ? "amber" : p.verdict === "blocked" ? "red" : "muted"}>{verdictMeta[p.verdict].word}</Chip>
+                  <li key={p.tweak.label}>
+                    <div className="flex items-baseline justify-between gap-3">
+                      <div className="font-medium">{p.tweak.label}</div>
+                      <span className={`font-slab text-[13px] ${verdictMeta[p.verdict].color}`}>{verdictMeta[p.verdict].word}</span>
                     </div>
-                    <div className="mt-2 flex items-center justify-between gap-2">
-                      <span className="font-mono text-xs text-muted">{p.headline}</span>
-                      <Button onClick={() => void applyTweak(p.tweak.patch)} disabled={busy}>Use this plan</Button>
+                    <div className="text-[15px] italic text-muted">{p.tweak.why}</div>
+                    <div className="mt-1 flex items-baseline justify-between gap-2">
+                      <span className="font-type text-[12.5px] text-muted">{p.headline}</span>
+                      <Button variant="secondary" onClick={() => void applyTweak(p.tweak.patch)} disabled={busy}>
+                        Use this plan
+                      </Button>
                     </div>
                   </li>
                 ))}
               </ul>
-            </Panel>
+            </section>
           )}
 
-          <Panel
-            label="Fault injection"
-            aside={<span className="rounded bg-amber px-1.5 py-0.5 font-mono text-[10px] font-semibold text-black">TEST</span>}
-          >
-            <div className="hazard mb-3 h-1.5 rounded-full" aria-hidden />
-            <p className="text-xs text-muted">A preview can be wrong. Break it on purpose, approve, and watch the guard refuse to commit.</p>
-            <div className="mt-3 space-y-2">
-              <FaultButton title="Data drift" note="Another writer imports 40 customers mid-review" onClick={() => void injectDrift()} disabled={!ready || busy || !sim || Boolean(result)} />
-              <FaultButton title="Hidden side effect" note="A migration ships a trigger the simulator never saw" onClick={() => void injectTrigger()} disabled={!ready || busy || !sim || Boolean(result) || triggerActive} />
-              {triggerActive && (
-                <div className="flex items-center justify-between gap-2 rounded-lg border border-red/40 bg-red/10 px-3 py-2 text-xs text-red">
-                  <span>Trigger <span className="font-mono">shadow_copy</span> is live. Re-simulate to reveal it.</span>
-                  <button type="button" onClick={() => void revertTrigger()} className="underline">Revert</button>
-                </div>
-              )}
-            </div>
-          </Panel>
-
-          <Panel label="Live database" aside={<Button variant="ghost" onClick={() => void reset()} disabled={!ready || busy}>Reset</Button>}>
-            {!counts ? (
-              <p className="text-sm text-muted">Starting Postgres in your browser…</p>
-            ) : (
-              <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-                {(
-                  [
-                    ["Customers", counts.customers],
-                    ["Orders", counts.orders],
-                    ["Captured", counts.captured],
-                    ["Refunded", counts.refunded],
-                    ["Ledger net", usd(counts.ledger)],
-                    ["Emails held", counts.held],
-                    ["Emails sent", counts.sent],
-                  ] as const
-                ).map(([k, v]) => (
-                  <div key={k} className="flex justify-between gap-2 border-b border-line py-1">
-                    <dt className="text-muted">{k}</dt>
-                    <dd className="font-mono tabular-nums">{v}</dd>
-                  </div>
-                ))}
-              </dl>
+          <section aria-label="Sabotage the proof" className="border border-dashed border-ink/70 p-4">
+            <h3 className="text-[20px] font-semibold italic">Sabotage the proof</h3>
+            <p className="mt-1 text-[15px] text-muted">A proof can be wrong. Break it on purpose, sign off, and watch the guard refuse to commit.</p>
+            <ul className="mt-3 space-y-2.5">
+              <li>
+                <button type="button" onClick={() => void injectDrift()} disabled={!ready || busy || !sim || Boolean(result)} className="text-left underline decoration-1 underline-offset-4 enabled:hover:text-red disabled:no-underline disabled:opacity-40">
+                  Data drift
+                </button>
+                <div className="text-[14.5px] italic text-muted">Another writer imports 40 customers mid-review.</div>
+              </li>
+              <li>
+                <button type="button" onClick={() => void injectTrigger()} disabled={!ready || busy || !sim || Boolean(result) || triggerActive} className="text-left underline decoration-1 underline-offset-4 enabled:hover:text-red disabled:no-underline disabled:opacity-40">
+                  Hidden side effect
+                </button>
+                <div className="text-[14.5px] italic text-muted">A migration ships a trigger the simulator never saw.</div>
+              </li>
+            </ul>
+            {!sim && <div className="mt-2 text-[14px] italic text-muted">Pull a proof first.</div>}
+            {triggerActive && (
+              <div className="mt-3 border-t border-rule pt-2 text-[15px] text-red">
+                Trigger <span className="font-type">shadow_copy</span> is live. Pull a fresh proof to reveal it.{" "}
+                <button type="button" onClick={() => void revertTrigger()} className="underline underline-offset-2">
+                  Revert it
+                </button>
+              </div>
             )}
-          </Panel>
-        </div>
+          </section>
+        </aside>
       </div>
+
+      {/* On the press now */}
+      <footer className="mt-12 border-t-2 border-ink pt-3 text-[15px]">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
+          <h2 className="font-semibold italic">On the press right now</h2>
+          <Button variant="ghost" onClick={() => void reset()} disabled={!ready || busy}>
+            Reset the shop
+          </Button>
+        </div>
+        {!counts ? (
+          <p className="italic text-muted">Starting Postgres in your browser…</p>
+        ) : (
+          <dl className="mt-2 grid grid-cols-2 gap-x-8 gap-y-1 font-type text-[13px] sm:grid-cols-4 lg:grid-cols-7">
+            {(
+              [
+                ["Customers", counts.customers],
+                ["Orders", counts.orders],
+                ["Captured", counts.captured],
+                ["Refunded", counts.refunded],
+                ["Ledger net", usd(counts.ledger)],
+                ["Emails held", counts.held],
+                ["Emails sent", counts.sent],
+              ] as const
+            ).map(([k, v]) => (
+              <div key={k}>
+                <dt className="font-sans text-[14px] italic text-muted">{k}</dt>
+                <dd className="tabular-nums">{v}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+      </footer>
 
       {/* Demo caption */}
       {demo && (
-        <div role="status" aria-live="polite" className="fixed inset-x-0 bottom-24 z-30 mx-auto w-[min(860px,calc(100%-2rem))] rise">
-          <div className="rounded-xl border border-amber/60 bg-[#120e05]/95 px-5 py-3.5 shadow-2xl backdrop-blur">
-            <div className="mb-1 font-mono text-[11px] uppercase tracking-widest text-amber">Guided demo · {demo.step}/{demo.total}</div>
-            <p className="text-[15px] leading-snug">{demo.caption}</p>
+        <div role="status" aria-live="polite" className="settle fixed inset-x-0 bottom-28 z-30 mx-auto w-[min(820px,calc(100%-2rem))]">
+          <div className="border-2 border-ink bg-hi px-5 py-3 shadow-[4px_4px_0_rgba(27,25,21,0.35)]">
+            <div className="font-type text-[12px]">
+              Guided demo · {demo.step}/{demo.total}
+            </div>
+            <p className="text-[18px] leading-snug">{demo.caption}</p>
           </div>
         </div>
       )}
 
-      {/* Takeoff bar */}
+      {/* Sign-off */}
       {sim && !result && (
-        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-line2 bg-bg/90 backdrop-blur-md">
-          <div className="mx-auto flex max-w-[1320px] flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
+        <div className="fixed inset-x-0 bottom-0 z-20 border-t-2 border-ink bg-paper shadow-[0_-10px_30px_-12px_rgba(50,36,10,0.5)]">
+          <div className="mx-auto flex max-w-[1280px] flex-wrap items-center justify-between gap-x-6 gap-y-2 px-4 py-2 sm:px-8 sm:py-2.5">
             <div className="min-w-0">
-              <div className={`font-display text-xl font-semibold uppercase tracking-[0.1em] ${meta.color}`}>{meta.word} · {meta.sub}</div>
-              <div className="text-xs text-muted">
+              <div className="flex items-baseline gap-3">
+                <span className={`font-slab text-[22px] ${meta.color}`}>{meta.word}</span>
+                <span className="text-[16px] italic text-muted">{meta.sub}</span>
+              </div>
+              <div className="hidden text-[15px] sm:block">
                 {verdict === "blocked"
-                  ? "Use a safer plan or change the parameters. Policy will not let this one fly."
+                  ? "Use a safer job or change the parameters. Policy will not let this one run."
                   : verdict === "noop"
-                    ? "Nothing to execute."
-                    : "Executing runs it for real, inside the limits you just reviewed. Anything bigger rolls back."}
+                    ? "Nothing to run."
+                    : "Signing runs it for real, inside the limits you just reviewed. Anything bigger rolls back."}
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <Button variant="ghost" onClick={() => void reject()} disabled={busy}>Reject</Button>
-              <HoldButton label={canTakeoff ? "Hold to execute" : "Denied"} disabled={!canTakeoff} busy={busy} onComplete={() => void approve()} />
+            <div className="flex items-end gap-4 sm:gap-6">
+              <Button variant="ghost" onClick={() => void reject()} disabled={busy} className="whitespace-nowrap">
+                Kill this job
+              </Button>
+              <SignOff label="Hold to sign off" disabledLabel="Can't sign off" disabled={!canSign} busy={busy} onComplete={() => void approve()} />
             </div>
           </div>
         </div>
@@ -756,26 +811,21 @@ export function Workbench() {
 
 function headline(sim: Simulation): string {
   const m = sim.report.metrics;
-  if (m.rowsTouched === 0) return "This action matches nothing.";
+  if (m.rowsTouched === 0) return "This job matches nothing.";
   const bits = [`changes ${m.rowsTouched} rows`];
   if (m.moneyMovedCents) bits.push(`moves ${usd(m.moneyMovedCents)}`);
   if (m.messagesQueued) bits.push(`emails ${m.messagesQueued} people`);
   if (m.destroyedOrders) bits.push(`deletes ${m.destroyedOrders} orders`);
-  return `This ${bits.join(", ")}.`;
+  return `This job ${bits.join(", ")}.`;
 }
 
-function FaultButton({ title, note, onClick, disabled }: { title: string; note: string; onClick: () => void; disabled: boolean }) {
+function Leader({ k, v, hot }: { k: string; v: string; hot?: boolean }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      title={disabled ? "Run a simulation first" : undefined}
-      className="w-full rounded-lg border border-line2 bg-panel2 px-3 py-2 text-left transition enabled:hover:border-red/60 disabled:opacity-35"
-    >
-      <div className="font-display text-[15px] font-semibold uppercase tracking-wider">{title}</div>
-      <div className="text-xs text-muted">{note}</div>
-    </button>
+    <div className="flex items-baseline gap-2">
+      <dt>{k}</dt>
+      <span className="leader" aria-hidden />
+      <dd className={`font-type text-[15px] tabular-nums ${hot ? "font-bold text-red" : ""}`}>{v}</dd>
+    </div>
   );
 }
 
@@ -803,24 +853,28 @@ function ResultBanner({
 
   if (result.status === "rolled_back") {
     return (
-      <section ref={ref} role="alert" className="rise mb-5 overflow-hidden rounded-xl border border-red/60 bg-red/10">
-        <div className="hazard h-1.5" aria-hidden />
-        <div className="grid gap-4 p-5 md:grid-cols-[1fr_auto] md:items-center">
+      <section ref={ref} role="alert" className="settle mb-8 bg-ink px-6 py-6 text-paper sm:px-9">
+        <div className="grid gap-5 md:grid-cols-[1fr_auto] md:items-end">
           <div>
-            <div className="font-mono text-[11px] uppercase tracking-widest text-red">Safety net tripped · takeoff rejected</div>
-            <h2 className="mt-1 font-display text-3xl font-bold uppercase tracking-wide">Nothing was written.</h2>
-            <p className="mt-1 text-sm">
-              The preview showed <strong className="font-mono">{result.approvedRows}</strong> row changes. The real run would have made <strong className="font-mono text-red">{result.actualRows}</strong>. The transaction was rolled back before commit.
+            <div className="font-type text-[12.5px] text-[#ff9a8e]">Safety net tripped · extra edition</div>
+            <h2 className="mt-1 text-[48px] font-semibold italic leading-none sm:text-[60px]">Stop the press.</h2>
+            <p className="mt-3 text-[19px]">
+              <strong>Nothing was written.</strong> The proof showed <strong className="font-type">{result.approvedRows}</strong> row changes. The real run would have made{" "}
+              <strong className="font-type text-[#ff9a8e]">{result.actualRows}</strong>, so the transaction was rolled back before commit.
             </p>
-            <ul className="mt-2 space-y-0.5 text-sm text-red">
+            <ul className="mt-2 space-y-0.5 text-[16px] text-[#ffc2ba]">
               {result.violations.map((v, i) => (
-                <li key={i}>▸ {v.detail}</li>
+                <li key={i}>– {v.detail}</li>
               ))}
             </ul>
           </div>
-          <div className="flex gap-2">
-            <Button variant="primary" onClick={onResim} disabled={busy}>Re-simulate with current data</Button>
-            <Button variant="ghost" onClick={onDone}>Dismiss</Button>
+          <div className="flex flex-wrap items-center gap-4">
+            <button type="button" onClick={onResim} disabled={busy} className="bg-paper px-4 py-2 text-[16px] font-medium text-ink disabled:opacity-40">
+              Re-simulate with current data
+            </button>
+            <button type="button" onClick={onDone} className="text-[16px] underline underline-offset-4">
+              Dismiss
+            </button>
           </div>
         </div>
       </section>
@@ -829,32 +883,36 @@ function ResultBanner({
   const rows = Object.values(result.diff).reduce((n, d) => n + d.inserted.length + d.deleted.length + d.updated.length, 0);
   const emails = result.diff.outbox.inserted.length;
   return (
-    <section ref={ref} className="rise mb-5 rounded-xl border border-green/60 bg-green/10 p-5">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+    <section ref={ref} className="settle mb-8 border-2 border-ink bg-paper px-6 py-5 sm:px-9">
+      <div className="flex flex-wrap items-end justify-between gap-5">
         <div>
-          <div className="font-mono text-[11px] uppercase tracking-widest text-green">{undone ? "Recovered" : "Executed"}</div>
-          <h2 className="mt-1 font-display text-3xl font-bold uppercase tracking-wide">{undone ? "Everything restored." : `${rows} rows committed.`}</h2>
-          <p className="mt-1 text-sm">
+          <div className="font-type text-[12.5px] text-muted">{undone ? "Run recalled" : "Run complete"}</div>
+          <h2 className="mt-1 text-[40px] font-semibold italic leading-none">{undone ? "Everything restored." : `${rows} rows committed.`}</h2>
+          <p className="mt-2 text-[17px]">
             {undone ? (
               <>
                 Removed {undone.restored.removed}, restored {undone.restored.updated} updated and {undone.restored.deleted} deleted rows.
                 {undone.unrecoverable.length > 0 && <span className="text-red"> {undone.unrecoverable.length} delivered emails cannot be unsent.</span>}
               </>
             ) : result.matchedPreview ? (
-              "The real effect matched the preview exactly."
+              "The real effect matched the proof exactly."
             ) : (
-              "The real effect stayed inside the approved limits but differed in detail from the preview."
+              "The real effect stayed inside the approved limits but differed in detail from the proof."
             )}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-4">
           {!undone && (
             <>
-              {emails > 0 && <span className="font-mono text-xs">{recallLeft > 0 ? `${emails} emails recallable for ${recallLeft}s` : `${emails} emails delivered, no longer recallable`}</span>}
-              <Button onClick={onUndo} disabled={busy}>Undo everything</Button>
+              {emails > 0 && <span className="font-type text-[12.5px]">{recallLeft > 0 ? `${emails} emails can be recalled for ${recallLeft}s` : `${emails} emails delivered, no longer recallable`}</span>}
+              <Button variant="secondary" onClick={onUndo} disabled={busy}>
+                Undo everything
+              </Button>
             </>
           )}
-          <Button variant="ghost" onClick={onDone}>Done</Button>
+          <Button variant="ghost" onClick={onDone}>
+            Done
+          </Button>
         </div>
       </div>
     </section>

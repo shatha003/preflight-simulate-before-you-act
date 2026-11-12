@@ -9,13 +9,13 @@ This is the realistic way a simulation fails. The simulator is not buggy; the da
 In the app:
 
 1. Run **Delete accounts that have been inactive for 6 months**, choose **Keep anyone who paid in the last year**.
-2. Click **Simulate a concurrent writer** (adds 40 customers; half have old payments, so they match this filter).
-3. Click **Approve & execute**.
+2. Under **Sabotage the proof**, click **Data drift** (adds 40 customers; half have old payments, so they match this filter).
+3. Press and hold **Hold to sign off**.
 
 Observed in a real browser run (production build):
 
 ```
-Safety net tripped. Nothing was written.
+Stop the press. Safety net tripped. Nothing was written.
 The preview showed 158 row changes. The real run would have made 238.
 - 20 rows in customers would be deleted that you never saw in the preview
 - 20 rows in orders would be deleted that you never saw in the preview
@@ -49,7 +49,7 @@ The check is deliberately strict (zero tolerance). A false alarm costs one re-si
 
 **Scenario.** Another team ships a migration while you review: triggers on `payments`, `outbox` and `customers` that copy every changed row into `trash`. The preview was taken before they existed, so it under-predicts the effect. This is the brief's "simulation under-predicts a side effect" case in its purest form.
 
-**Reproduce.** Run any action, click **Hidden side effect** under Fault injection, then press and hold **Hold to execute**.
+**Reproduce.** Run any action, click **Hidden side effect** under Sabotage the proof, then press and hold **Hold to sign off**.
 
 **Result.** The real run writes rows the preview never listed (`N rows in trash would be created, you approved M`). The guard rolls back and nothing is written. Clicking **Re-simulate with current data** now shows the trigger's effect, and the checklist item **Writes only what you asked for** fails with "N unrequested writes from a trigger".
 

@@ -2,7 +2,7 @@
 
 Entry for the DOO Builders League challenge **Simulate Before You Act**.
 
-An agent that can write to real systems should not be trusted to describe what it is about to do. Preflight **runs** the action first, on a real Postgres, inside a transaction, records every row it touches, rolls it back, and shows you who it would hit. Only then can you approve, tweak, or reject. If reality turns out larger than the preview, the real run rolls itself back before commit.
+"Preflight" is a print-shop term: the check you run on a proof before the press runs. That is the whole product. An agent that can write to real systems should not be trusted to describe what it is about to do, so Preflight **runs** the action first, on a real Postgres, inside a transaction, records every row it touches, rolls it back, and lays the result over your customer ledger as a proofreader's red-pen markup. Only then can you approve, tweak, or reject. If reality turns out larger than the preview, the real run rolls itself back before commit.
 
 - **Live demo:** https://preflight-simulate-before-you-act.vercel.app
 - **Repo:** https://github.com/shatha003/preflight-simulate-before-you-act
@@ -15,19 +15,19 @@ An agent that can write to real systems should not be trusted to describe what i
 intent -> simulate -> present -> approve / tweak / reject -> execute (guarded) -> undo
 ```
 
-1. **Flight plan (intent).** Plain English becomes one of three typed actions with parameters. An LLM does this when a gateway is available, otherwise a rule parser does. Neither writes SQL.
+1. **Job order (intent).** Plain English becomes one of three typed actions with parameters. An LLM does this when a gateway is available, otherwise a rule parser does. Neither writes SQL.
 2. **Simulate.** The action's SQL runs in a transaction on the live data. Before and after snapshots are diffed row by row, then the transaction is rolled back. Foreign-key cascades and triggers fire for real, so side effects are observed, not narrated.
-3. **Present.**
-   - **Manifest:** one square per customer. Switch Reality to Simulation and the blast radius lights up. Hover any square to see exactly what happens to that customer.
-   - **Clearance:** a departure board (CLEARED, HOLD, DENIED) plus a pre-flight checklist. Every policy rule is evaluated on what actually changed, and shown with its evidence.
-   - **Evidence:** the row-level before/after diff, the exact SQL receipt, the rollback plan, and the flight record.
+3. **Present.** The simulation is a press proof:
+   - **The ledger:** every customer is a typeset line. Laid over it, the proof strikes through who would be deleted, highlights who would be refunded, underlines who would be emailed, and circles the dangerous ones. Point at any name for its margin note.
+   - **The stamp:** APPROVED, HOLD or KILLED, with the numbers beside it, and the **proofreader's notes**: every policy rule ticked or crossed from what actually changed.
+   - **Overleaf:** the row-level redline, the exact SQL receipt, the rollback plan, and the press log.
 4. **Decide.** Policy can deny the action. Safer plans (a parameter patch each) are simulated ahead of time, so you see the result of a fix before choosing it.
-5. **Execute, guarded.** You press and hold to confirm. Approval freezes an **envelope**: which rows may change, how many may be created, how much money may move. The real run is measured before `COMMIT`. Outside the envelope means `ROLLBACK`, nothing written.
+5. **Execute, guarded.** You sign off: press and hold, and your signature writes itself. Approval freezes an **envelope**: which rows may change, how many may be created, how much money may move. The real run is measured before `COMMIT`. Outside the envelope means `ROLLBACK`, nothing written.
 6. **Undo.** Before-images from the committed run restore the database exactly. Emails are held for 60 seconds and recallable until then; after that they are reported as unrecoverable.
 
 ## Two failure tests, built in
 
-Open **Fault injection**, then approve the pending preview.
+Open **Sabotage the proof**, then sign off on the pending proof.
 
 | Fault | What happens | Why the preview was wrong |
 |---|---|---|
@@ -46,11 +46,11 @@ Both are caught by the same guard: the real effect leaves the approved envelope,
 
 ## Try it by hand
 
-1. Click **Delete accounts that have been inactive for 6 months**. The board reads **DENIED** and 28 squares pulse red: those customers have payments inside the 12-month retention window.
-2. Use the safer plan **Keep anyone who paid in the last year**. It was already simulated; the board drops to **HOLD**.
-3. Under Fault injection, click **Data drift**, then press and hold **Hold to execute**. The safety net trips and nothing is written.
-4. **Re-simulate with current data**, hold to execute, then **Undo everything**. The live-database counters return to their starting values.
-5. Under the **Flight record** tab, **Download flight record** exports the hash-chained audit log as JSON.
+1. Click **Delete accounts that have been inactive for 6 months**. The ledger is struck through in red, 28 names are circled, and the stamp says **KILLED**: those customers have payments inside the 12-month retention window.
+2. Use the safer plan **Keep anyone who paid in the last year**. It was already simulated; the stamp changes to **HOLD**.
+3. Under Sabotage the proof, click **Data drift**, then press and hold **Hold to sign off**. The press stops, the page says **Stop the press**, and nothing is written.
+4. **Re-simulate with current data**, sign off, then **Undo everything**. The "On the press right now" counters return to their starting values.
+5. Under the **Press log** tab, **Download press log** exports the hash-chained audit log as JSON.
 
 ## Run locally
 
@@ -69,14 +69,14 @@ Optional: copy `.env.example` to `.env.local` and set `AI_GATEWAY_API_KEY` to re
 src/lib/schema.ts     schema, triggers, deterministic seed
 src/lib/simulate.ts   dry run in a transaction, envelope, effect signature
 src/lib/risk.ts       metrics, findings, policy checklist, verdict, side effects, rollback path
-src/lib/field.ts      per-customer seat model read from the simulated diff
+src/lib/field.ts      per-customer marks, read from the simulated diff
 src/lib/tweaks.ts     safer parameter patches, each pre-simulated
 src/lib/execute.ts    guarded commit
 src/lib/undo.ts       restore from before-images, email hold window
 src/lib/audit.ts      hash-chained audit log
 src/lib/chaos.ts      the two fault injections
 src/lib/intent.ts     rule-based intent parser (LLM route: src/app/api/intent)
-src/components/       Workbench, Field (manifest), Flap (departure board), HoldButton, ...
+src/components/       Workbench, Ledger (the markup), Stamp, SignOff, Notes, ...
 tests/                19 tests
 docs/                 architecture, failure test, thesis, notes, video script
 ```

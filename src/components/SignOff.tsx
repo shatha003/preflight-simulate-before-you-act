@@ -2,20 +2,24 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+// A hand-drawn signature, revealed stroke by stroke while the button is held.
+const SIGNATURE =
+  "M6 40 C 14 8, 30 6, 26 30 C 24 44, 38 44, 46 24 C 52 10, 58 40, 70 30 C 78 24, 80 14, 92 22 C 104 30, 96 44, 112 34 C 126 24, 134 14, 146 26 C 152 34, 160 34, 172 20 M 10 49 C 60 44, 120 51, 210 43";
+
 /**
- * Press and hold to commit. A deliberate, tactile step for an action that cannot be
- * taken lightly. Works with pointer, and with Space or Enter held down.
+ * Sign-off. Executing is a deliberate act, so you sign for it: press and hold, and the
+ * signature writes itself. Let go early and it fades. Works with Space or Enter held too.
  */
-export function HoldButton({
+export function SignOff({
   label,
-  holdLabel = "Keep holding…",
+  disabledLabel,
   holdMs = 1100,
   disabled,
   busy,
   onComplete,
 }: {
   label: string;
-  holdLabel?: string;
+  disabledLabel: string;
   holdMs?: number;
   disabled?: boolean;
   busy?: boolean;
@@ -48,7 +52,7 @@ export function HoldButton({
         setTimeout(() => {
           done.current = false;
           setProgress(0);
-        }, 300);
+        }, 400);
         return;
       }
       raf.current = requestAnimationFrame(tick);
@@ -63,12 +67,12 @@ export function HoldButton({
 
   useEffect(() => () => stop(), [stop]);
 
-  const holding = progress > 0 && progress < 1;
+  const off = disabled || busy;
   return (
     <button
       type="button"
-      disabled={disabled || busy}
-      aria-describedby="hold-help"
+      disabled={off}
+      aria-describedby="sign-help"
       onPointerDown={(e) => {
         e.currentTarget.setPointerCapture?.(e.pointerId);
         begin();
@@ -85,13 +89,19 @@ export function HoldButton({
       onKeyUp={(e) => {
         if (e.key === " " || e.key === "Enter") stop();
       }}
-      className="relative isolate min-w-[220px] select-none overflow-hidden rounded-lg border border-amber/60 bg-[#1a1407] px-5 py-3 font-display text-lg font-semibold uppercase tracking-[0.14em] text-amber transition enabled:hover:border-amber disabled:opacity-35"
+      className="group block w-[190px] select-none sm:w-[250px] text-left disabled:opacity-45"
       style={{ touchAction: "none" }}
     >
-      <span className="absolute inset-y-0 left-0 -z-10 bg-amber" style={{ width: `${progress * 100}%`, transition: holding ? "none" : "width .2s" }} aria-hidden />
-      <span className={progress > 0.5 ? "text-black" : ""}>{busy ? "Working…" : holding ? holdLabel : label}</span>
-      <span id="hold-help" className="sr-only">
-        Press and hold for about one second to confirm.
+      <svg viewBox="0 0 220 56" className="block h-10 w-full sm:h-14" aria-hidden fill="none" strokeLinecap="round" strokeLinejoin="round">
+        <text x="2" y="14" fontSize="15" className="font-hand" fill="var(--red)" stroke="none">
+          x
+        </text>
+        <path d={SIGNATURE} pathLength={1} stroke="var(--ink)" strokeWidth="1.6" opacity="0.14" />
+        <path d={SIGNATURE} pathLength={1} stroke="var(--ink)" strokeWidth="2.4" strokeDasharray="1" strokeDashoffset={1 - progress} />
+      </svg>
+      <span className="mt-0.5 block border-t-2 border-ink pt-1 text-[15px] italic">{busy ? "Working…" : off ? disabledLabel : progress > 0 ? "Keep holding…" : label}</span>
+      <span id="sign-help" className="sr-only">
+        Press and hold for about one second to sign off and run the job.
       </span>
     </button>
   );
