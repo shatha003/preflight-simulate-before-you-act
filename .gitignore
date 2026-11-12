@@ -6,3 +6,6 @@ node_modules
 .vercel
 .opencode
 next-env.d.ts
+
+.vercel
+.env*

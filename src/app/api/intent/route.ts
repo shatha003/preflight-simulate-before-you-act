@@ -29,7 +29,8 @@ export async function POST(req: Request) {
   const input = (text ?? "").trim().slice(0, 500);
   if (!input) return Response.json({ error: "Empty request" }, { status: 400 });
 
-  const hasGateway = Boolean(process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_OIDC_TOKEN);
+  // On Vercel, AI Gateway authenticates with the project's OIDC token automatically.
+  const hasGateway = Boolean(process.env.AI_GATEWAY_API_KEY || process.env.VERCEL);
   if (hasGateway) {
     try {
       const { output } = await generateText({
@@ -41,8 +42,11 @@ export async function POST(req: Request) {
       const { action, rationale, ...raw } = output;
       const result: IntentResult = { proposal: { action, params: coerceParams(action, raw) }, source: "llm", rationale };
       return Response.json(result);
-    } catch {
-      // fall through to the rule-based parser
+    } catch (e) {
+      // Fall back to the rule-based parser, and say why so the failure is visible.
+      const note = e instanceof Error ? e.message.slice(0, 200) : "LLM call failed";
+      console.error("intent LLM failed:", note);
+      return Response.json({ ...parseIntentRules(input), note });
     }
   }
   return Response.json(parseIntentRules(input));

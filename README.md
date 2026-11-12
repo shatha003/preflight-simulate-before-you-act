@@ -4,7 +4,8 @@ Entry for the DOO Builders League challenge **Simulate Before You Act**.
 
 An agent that can write to real systems should not be trusted to describe what it is about to do. Preflight **runs** the action first, on a real Postgres, inside a transaction, records every row it touches, rolls it back, and shows you the result. Only then can you approve, tweak, or reject. If reality turns out larger than the preview, the real run rolls itself back before commit.
 
-- **Live demo:** _add URL after deploy_
+- **Live demo:** https://preflight-simulate-before-you-act.vercel.app
+- **Repo:** https://github.com/shatha003/preflight-simulate-before-you-act
 - **Video (90s):** _add Loom URL_
 - Everything runs in the browser. No account, no backend database.
 

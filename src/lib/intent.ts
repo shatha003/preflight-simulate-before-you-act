@@ -1,6 +1,7 @@
 import { ACTIONS, coerceParams, type ActionId, type Proposal } from "./actions";
 
 export interface IntentResult {
+  note?: string;
   proposal: Proposal;
   source: "llm" | "rules";
   rationale: string;
