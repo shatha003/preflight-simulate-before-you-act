@@ -13,66 +13,96 @@ export function Button({
   children: ReactNode;
   onClick?: () => void;
   disabled?: boolean;
-  variant?: "primary" | "secondary" | "danger" | "ghost";
+  variant?: "primary" | "secondary" | "danger" | "ghost" | "sun";
   title?: string;
   className?: string;
 }) {
-  const base = "px-3.5 py-1.5 text-[15px] font-medium transition disabled:opacity-40";
+  if (variant === "ghost") {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        title={title}
+        className={`px-1 text-[15px] font-semibold underline decoration-2 underline-offset-4 transition enabled:hover:-rotate-2 enabled:hover:decoration-wavy disabled:opacity-40 ${className}`}
+      >
+        {children}
+      </button>
+    );
+  }
   const v = {
-    primary: "bg-ink text-paper enabled:hover:bg-[#3a352b]",
-    secondary: "border border-ink text-ink enabled:hover:bg-ink enabled:hover:text-paper",
-    danger: "border border-red text-red enabled:hover:bg-red enabled:hover:text-paper",
-    ghost: "px-1 underline decoration-1 underline-offset-4 text-ink enabled:hover:text-blue",
+    primary: "bg-ink text-cream",
+    secondary: "bg-cream text-ink enabled:hover:bg-lime",
+    danger: "bg-tomato text-ink",
+    sun: "bg-sun text-ink",
   }[variant];
   return (
-    <button type="button" onClick={onClick} disabled={disabled} title={title} className={`${base} ${v} ${className}`}>
+    <button type="button" onClick={onClick} disabled={disabled} title={title} className={`btn px-4 py-1.5 text-[15px] ${v} ${className}`}>
       {children}
     </button>
   );
 }
 
-/** What a verdict is called on the shop floor. Rejected proofs are "killed". */
+/** What each verdict is called, and the one accent it wears. */
 export const verdictMeta = {
-  safe: { word: "APPROVED", color: "text-ink", sub: "Safe to run" },
-  review: { word: "HOLD", color: "text-blue", sub: "Needs your sign-off" },
-  blocked: { word: "KILLED", color: "text-red", sub: "Blocked by policy" },
-  noop: { word: "NO CHANGE", color: "text-muted", sub: "Nothing would change" },
-  printed: { word: "PRINTED", color: "text-ink", sub: "Run complete" },
-  recalled: { word: "RECALLED", color: "text-blue", sub: "Everything restored" },
-  stopped: { word: "STOPPED", color: "text-red", sub: "Guard rolled it back" },
-  idle: { word: "NO PROOF YET", color: "text-muted", sub: "Give the press a job" },
+  safe: { word: "APPROVED", bg: "bg-lime", sub: "Safe to run" },
+  review: { word: "HOLD", bg: "bg-sun", sub: "Needs your sign-off" },
+  blocked: { word: "KILLED", bg: "bg-tomato", sub: "Blocked by policy" },
+  noop: { word: "NO CHANGE", bg: "bg-cream2", sub: "Nothing would change" },
+  printed: { word: "SHIPPED", bg: "bg-lime", sub: "Run complete" },
+  recalled: { word: "RECALLED", bg: "bg-sky", sub: "Everything restored" },
+  stopped: { word: "STOPPED", bg: "bg-tomato", sub: "Guard rolled it back" },
+  idle: { word: "NO RUN YET", bg: "bg-transparent", sub: "Give the agent a job" },
 } as const;
 
+export function VerdictChip({ v, className = "" }: { v: keyof typeof verdictMeta; className?: string }) {
+  const m = verdictMeta[v];
+  return <span className={`chip ${m.bg} ${className}`}>{m.word}</span>;
+}
+
 export function Tag({ children, tone = "ink" }: { children: ReactNode; tone?: "ink" | "red" | "blue" }) {
-  const c = tone === "red" ? "text-red" : tone === "blue" ? "text-blue" : "text-ink";
-  return <span className={`tag ${c}`}>{children}</span>;
+  const c = tone === "red" ? "bg-tomato" : tone === "blue" ? "bg-sky" : "bg-cream2";
+  return <span className={`chip ${c}`}>{children}</span>;
 }
 
-/** A small italic label. Sentence case: it names a thing, it doesn't shout. */
+/** A small label. Sentence case: it names a thing, it doesn't shout. */
 export function Label({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <div className={`text-[15px] italic text-muted ${className}`}>{children}</div>;
+  return <div className={`text-[14.5px] text-muted ${className}`}>{children}</div>;
 }
 
-/** Crop marks, the L-shaped corner ticks printers trim to. Purely a print-room cue; they sit outside the sheet. */
-export function CropMarks() {
-  const m = "absolute h-4 w-4 border-ink/70";
+/**
+ * The mascot: one of the crowd, promoted to logo. Its eyes follow the cursor through
+ * the same --px/--py props the crowd uses.
+ */
+export function Mascot({ size = 64, className = "", ghost = false }: { size?: number; className?: string; ghost?: boolean }) {
   return (
-    <div aria-hidden className="pointer-events-none hidden sm:block">
-      <span className={`${m} -left-5 -top-5 border-b border-r`} style={{ transform: "translate(0,0)" }} />
-      <span className={`${m} -right-5 -top-5 border-b border-l`} />
-      <span className={`${m} -bottom-5 -left-5 border-r border-t`} />
-      <span className={`${m} -bottom-5 -right-5 border-l border-t`} />
-    </div>
+    <svg width={size} height={size} viewBox="0 0 40 40" aria-hidden data-look className={`mascot overflow-visible ${className}`} style={{ ["--r" as string]: 0.35 }}>
+      <g className="bob" style={{ transformBox: "fill-box", transformOrigin: "50% 100%", animation: "bob 2.6s ease-in-out infinite" }}>
+        {ghost ? (
+          <path d={GHOST_PATH} fill="var(--ghost)" stroke="var(--ink)" strokeWidth="2.2" strokeLinejoin="round" />
+        ) : (
+          <path d={BLOB_PATH} fill="var(--sun)" stroke="var(--ink)" strokeWidth="2.2" />
+        )}
+        <Eyes />
+        <path d="M16 27 Q20 31 24 27" fill="none" stroke="var(--ink)" strokeWidth="2" strokeLinecap="round" />
+      </g>
+    </svg>
   );
 }
 
-/** Registration target, the print shop's alignment mark. Used as the logo. */
-export function Registration({ size = 30 }: { size?: number }) {
+export const BLOB_PATH = "M20 6 C30 6 35 12 35 22 C35 31 29 36 20 36 C11 36 5 31 5 22 C5 12 10 6 20 6 Z";
+export const GHOST_PATH = "M7 21 C7 11 12.5 5.5 20 5.5 C27.5 5.5 33 11 33 21 L33 36 L28.7 32.5 L24.3 36 L20 32.5 L15.7 36 L11.3 32.5 L7 36 Z";
+
+/** Two eyes: whites, pupils and lids. Pupils are the part that moves. */
+export function Eyes() {
   return (
-    <svg width={size} height={size} viewBox="0 0 30 30" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.4">
-      <circle cx="15" cy="15" r="8" />
-      <circle cx="15" cy="15" r="3" />
-      <path d="M15 1v10M15 19v10M1 15h10M19 15h10" />
-    </svg>
+    <g className="lids">
+      <circle cx="15" cy="19" r="4.2" fill="#fff" stroke="var(--ink)" strokeWidth="1.6" />
+      <circle cx="25" cy="19" r="4.2" fill="#fff" stroke="var(--ink)" strokeWidth="1.6" />
+      <g className="pupils">
+        <circle cx="15" cy="19" r="2.1" fill="var(--ink)" />
+        <circle cx="25" cy="19" r="2.1" fill="var(--ink)" />
+      </g>
+    </g>
   );
 }

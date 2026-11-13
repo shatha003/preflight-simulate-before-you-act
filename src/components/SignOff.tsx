@@ -2,13 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-// A hand-drawn signature, revealed stroke by stroke while the button is held.
-const SIGNATURE =
-  "M6 40 C 14 8, 30 6, 26 30 C 24 44, 38 44, 46 24 C 52 10, 58 40, 70 30 C 78 24, 80 14, 92 22 C 104 30, 96 44, 112 34 C 126 24, 134 14, 146 26 C 152 34, 160 34, 172 20 M 10 49 C 60 44, 120 51, 210 43";
-
 /**
- * Sign-off. Executing is a deliberate act, so you sign for it: press and hold, and the
- * signature writes itself. Let go early and it fades. Works with Space or Enter held too.
+ * Sign-off. Executing is a deliberate act, so it is not a click: press and hold, and the
+ * button fills with lime. Let go early and it drains. Works with Space or Enter held too.
  */
 export function SignOff({
   label,
@@ -68,6 +64,7 @@ export function SignOff({
   useEffect(() => () => stop(), [stop]);
 
   const off = disabled || busy;
+  const pressing = progress > 0 && progress < 1;
   return (
     <button
       type="button"
@@ -89,17 +86,14 @@ export function SignOff({
       onKeyUp={(e) => {
         if (e.key === " " || e.key === "Enter") stop();
       }}
-      className="group block w-[190px] select-none sm:w-[250px] text-left disabled:opacity-45"
+      className={`btn hold ${pressing ? "pressing" : ""} min-w-[190px] select-none bg-cream px-6 py-3 text-[17px] text-ink sm:min-w-[240px] sm:text-[19px]`}
       style={{ touchAction: "none" }}
     >
-      <svg viewBox="0 0 220 56" className="block h-10 w-full sm:h-14" aria-hidden fill="none" strokeLinecap="round" strokeLinejoin="round">
-        <text x="2" y="14" fontSize="15" className="font-hand" fill="var(--red)" stroke="none">
-          x
-        </text>
-        <path d={SIGNATURE} pathLength={1} stroke="var(--ink)" strokeWidth="1.6" opacity="0.14" />
-        <path d={SIGNATURE} pathLength={1} stroke="var(--ink)" strokeWidth="2.4" strokeDasharray="1" strokeDashoffset={1 - progress} />
-      </svg>
-      <span className="mt-0.5 block border-t-2 border-ink pt-1 text-[15px] italic">{busy ? "Working…" : off ? disabledLabel : progress > 0 ? "Keep holding…" : label}</span>
+      <span className="fill" aria-hidden style={{ transform: `scaleX(${progress})` }} />
+      <span aria-hidden className="inline-block transition-transform" style={{ transform: `rotate(${progress * 360}deg) scale(${1 + progress * 0.3})` }}>
+        {progress >= 1 ? "✺" : "✦"}
+      </span>
+      <span>{busy ? "Working…" : off ? disabledLabel : progress >= 1 ? "Signed!" : progress > 0 ? "Keep holding…" : label}</span>
       <span id="sign-help" className="sr-only">
         Press and hold for about one second to sign off and run the job.
       </span>

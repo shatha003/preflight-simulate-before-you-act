@@ -37,7 +37,8 @@ Why this is not an "are you sure?" dialog: the simulation changes the decision. 
 - [x] `/api/intent`, full UI (Workbench, Report, DiffView)
 - [x] 17 tests passing; production build verified end-to-end in a real browser (all 3 actions, tweak, drift safety net, undo)
 - [x] README, docs/ARCHITECTURE, FAILURE_TEST, THESIS (under 300 words), NOTES, VIDEO_SCRIPT
-- [ ] Deploy (Vercel), public GitHub repo, record video, fill URLs in README, submit
+- [x] Deploy (Vercel), public GitHub repo, URLs in README
+- [ ] Submit at build.doo.ooo (repo URL, live URL, notes; Loom skipped, it is optional)
 
 ## Phases
 
@@ -94,7 +95,7 @@ Why this is not an "are you sure?" dialog: the simulation changes the decision. 
 - 90-second video script: simulate, review, execute on a real action, plus the safety net tripping.
 
 ### 9. Submit (build.doo.ooo)
-- Repo URL, live demo URL, Loom URL, notes.
+- Repo URL, live demo URL, notes. Loom is optional and skipped; the live site has a built-in guided demo.
 - Sign in at build.doo.ooo/auth first.
 
 ## Test plan (vitest, in Node with in-memory PGlite)
@@ -132,11 +133,9 @@ Disqualifiers avoided: no confirm-dialog dressing, a real action is gated, live 
 
 ## Needs from the owner
 
-1. Record the 90-second Loom (script provided).
-2. GitHub login so the public repo can be pushed.
-3. Vercel CLI install and login for the live demo.
-4. Builders League account sign-in for submission.
-5. Optional: AI Gateway key for LLM intent parsing.
+1. Builders League account sign-in for submission.
+2. Optional: card on file for AI Gateway so LLM intent parsing works.
+3. Optional: Loom recording (skipped).
 
 ## Next challenges (only if time remains)
 
